@@ -68,8 +68,13 @@ Roles: `#peak`, `#base`.
    Crossing time with `interpolate: linear`: `tc = t[i] + (t[i+1] − t[i]) · (V − x[i]) / (x[i+1] − x[i])`.
    With `interpolate: none`: `tc = t[i+1]`, and the evidence records `t[i+1] − t[i]` as discretization error.
 2. **State.** With H = 0 the state of sample j is `x[j] ≥ V`. With H > 0: `hi = V + H/2`, `lo = V − H/2`; the
-   state becomes high at a sample with `x ≥ hi`, low at a sample with `x ≤ lo`, and otherwise holds. The initial state
-   is `x[first finite] ≥ V`. Non-finite samples hold the state.
+   state becomes high at a sample with `x ≥ hi`, low at a sample with `x ≤ lo` **and** `x < V`, and otherwise holds.
+   The initial state is `x[first finite] ≥ V`. Non-finite samples hold the state.
+
+   The extra `x < V` condition is what exact arithmetic gives: for every `H > 0` the band's lower edge lies strictly
+   below the level, so a sample at exactly `V` is never low. It matters only when `H` is smaller than one unit in the
+   last place of `V`, where `lo` rounds onto `V`. Without it a sample at exactly `V` could flip the state low while
+   step 1 reports no falling level crossing anywhere, leaving step 3 with no crossing to timestamp.
 3. **Flip.** When the state changes at sample j, the flip's crossing is the last level crossing in the same direction
    with `i + 1 ≤ j`. Its time is that crossing's `tc`. If the level crossing spans a non-finite gap, the bracketing
    finite samples are used and the flip is marked `gap`.
