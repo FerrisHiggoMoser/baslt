@@ -3,6 +3,11 @@
 from __future__ import annotations
 
 import os
+import sys
+from pathlib import Path
+
+# Make tests/reference importable as `reference.<module>` from any test file.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 try:
     from hypothesis import HealthCheck, settings
