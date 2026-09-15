@@ -9,8 +9,12 @@ bucket. For every bucket containing a finite sample and for every component, the
 bucket's finite samples are retained.
 
 Finiteness follows the contract's convention: a sample is finite when every component is finite
-(`_common.finite_mask`). Evidence `buckets` counts the distinct buckets that hold at least one sample (boundary
-memberships included) and `buckets_with_finite` those holding at least one finite sample.
+(`_common.finite_mask`).
+
+Existence and membership differ. The buckets of a signal are exactly the primary buckets `m(i)` of its samples; a
+borrowed boundary sample widens the membership of an existing bucket but never creates one (in particular it never
+creates a bucket below the first sample's bucket). Evidence `buckets` counts the distinct primary buckets and
+`buckets_with_finite` those that contain a finite sample, borrowed boundary samples included.
 
 `bucket_ids` is the single implementation of the bucket formula and is meant to be reused. For a sample flagged by
 its boundary mask the neighbouring bucket is always `ids - 1`. Let `u = (t - o) / interval` and `K = rint(u)` with
@@ -149,9 +153,13 @@ def evaluate(sig: Signal, params: Mapping[str, object], bits: Mapping[str, int])
 
     fin = finite_mask(v)[src]  # one mask per sample, shared by every component
     has = _grouped_first(fin, starts) < m
-    evidence["buckets"] = int(starts.shape[0])
-    evidence["buckets_with_finite"] = int(has.sum())
-    if not has.any():
+    # Only primary buckets exist; a borrowed boundary sample never creates a bucket of its own.
+    primary = np.unique(ids)
+    exists = np.isin(key[starts], primary)
+    keep = has & exists
+    evidence["buckets"] = int(primary.shape[0])
+    evidence["buckets_with_finite"] = int(keep.sum())
+    if not keep.any():
         return OpResult(SampleSet.empty(), evidence, STATUS_NOT_APPLICABLE, ["no finite sample"])
 
     all_finite = bool(fin.all())
@@ -167,8 +175,8 @@ def evaluate(sig: Signal, params: Mapping[str, object], bits: Mapping[str, int])
         gmin = np.repeat(np.minimum.reduceat(hi_fill, starts), sizes)
         first_max = _grouped_first(fin & (col == gmax), starts)
         first_min = _grouped_first(fin & (col == gmin), starts)
-        picks.append(src[first_max[has]])
-        picks.append(src[first_min[has]])
+        picks.append(src[first_max[keep]])
+        picks.append(src[first_min[keep]])
 
     samples = SampleSet.from_points(np.concatenate(picks), bit)
     return OpResult(samples=samples, evidence=evidence, status=STATUS_PASS)

@@ -91,10 +91,14 @@ def window_buckets_loop(t, interval: float, origin: float) -> list[list[int]]:
 
 def window_extrema_loop(t, v, interval: float, origin: float) -> dict:
     """Retained set and evidence counts for window_extrema."""
-    members: dict[int, list[int]] = {}
-    for i, buckets in enumerate(window_buckets_loop(t, interval, origin)):
+    per_sample = window_buckets_loop(t, interval, origin)
+    # Only primary buckets exist; borrowing widens membership but never creates a bucket.
+    exists = {buckets[0] for buckets in per_sample}
+    members: dict[int, list[int]] = {b: [] for b in exists}
+    for i, buckets in enumerate(per_sample):
         for b in buckets:
-            members.setdefault(b, []).append(i)
+            if b in exists:
+                members[b].append(i)
     cols = _columns(v)
     finite = _sample_finite(cols)
     retained: set[int] = set()

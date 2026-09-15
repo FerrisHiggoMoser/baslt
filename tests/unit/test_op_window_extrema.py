@@ -176,10 +176,10 @@ def test_basic_buckets_and_evidence():
     t = [0.0, 0.2, 0.4, 0.6, 1.2, 1.4, 1.7]
     v = [1.0, 3.0, 2.0, 0.5, 9.0, 9.0, -1.0]
     res, idx = _run(t, v, 1.0)
-    # bucket 0: t=0 (also bucket -1), 0.2, 0.4, 0.6 ; bucket 1: 1.2, 1.4, 1.7
+    # bucket 0: t=0, 0.2, 0.4, 0.6 ; bucket 1: 1.2, 1.4, 1.7. t=0 is borrowed into bucket -1, which does not exist.
     assert res.status == "pass"
-    assert res.evidence == {"buckets": 3, "buckets_with_finite": 3, "interval": 1.0, "origin": 0.0}
-    assert idx == [0, 1, 3, 4, 6]
+    assert res.evidence == {"buckets": 2, "buckets_with_finite": 2, "interval": 1.0, "origin": 0.0}
+    assert idx == [1, 3, 4, 6]
     json.dumps(res.evidence)
 
 
@@ -207,7 +207,7 @@ def test_all_nan_signal_not_applicable():
     assert res.status == "not_applicable"
     assert idx == []
     assert res.evidence["buckets_with_finite"] == 0
-    assert res.evidence["buckets"] == 4  # buckets -1, 0, 1, 2 (every sample sits on a boundary)
+    assert res.evidence["buckets"] == 3  # buckets 0, 1, 2; the borrowed bucket -1 does not exist
     assert res.notes == ["no finite sample"]
 
 
@@ -260,9 +260,9 @@ def test_one_khz_clock_evaluate_matches_reference():
     res, idx = _run(t, v, 0.1)
     ref = window_extrema_loop(t, v, 0.1, 0.0)
     assert set(idx) == ref["retained"]
-    # t=0 and t=1 sit on boundaries, so buckets -1 and 10 exist besides 0..9.
-    assert res.evidence["buckets"] == ref["buckets"] == 12
-    assert ref["per_bucket"][-1][0] == (0, 0)
+    # primary buckets are 0..10; t=0 is borrowed into bucket -1, which does not exist.
+    assert res.evidence["buckets"] == ref["buckets"] == 11
+    assert -1 not in ref["per_bucket"]
     for b in range(0, 10):
         assert ref["per_bucket"][b][0][0] == 100 * (b + 1)
         assert 100 * (b + 1) in idx
@@ -343,9 +343,9 @@ def test_duplicate_timestamps():
     res, idx = _run(t, v, 1.0)
     ref = window_extrema_loop(t, v, 1.0, 0.0)
     assert set(idx) == ref["retained"]
-    # bucket -1: {0}; bucket 0: {0..3} plus borrowed {4, 5}; bucket 1: {4, 5}
-    assert idx == [0, 3, 4]
-    assert res.evidence["buckets"] == 3
+    # bucket 0: {0..3} plus borrowed {4, 5}; bucket 1: {4, 5}. Bucket -1 does not exist.
+    assert idx == [3, 4]
+    assert res.evidence["buckets"] == 2
 
 
 def test_invalid_interval_param():
