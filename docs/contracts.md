@@ -33,13 +33,20 @@ Not applicable: no finite sample.
 ## window_extrema (interval Δ, origin o)
 
 Bucket of sample i: `m(i) = floor((t[i] - o) / Δ + δ)` with `δ = 8 · ulp(max(|t[0]|, |t[n-1]|) / Δ)`. Planner and
-verifier use exactly this formula. A sample whose `(t[i] - o)/Δ` lies within `δ` of an integer boundary also belongs
-to the neighbouring bucket.
+verifier use exactly this formula.
+
+**Existence and membership are different.** The buckets of a signal are exactly the values `m(i)` taken by its
+samples; no other bucket exists. Membership is wider: sample i belongs to bucket `m(i)`, and also to bucket
+`m(i) − 1` when `|u − round(u)| ≤ δ` for `u = (t[i] − o)/Δ`, that is when the sample sits on a bucket boundary. A
+bucket that exists may therefore contain a finite sample only by borrowing a boundary sample from its neighbour, and
+it is still covered by the guarantee.
 
 Guarantee: for every bucket containing a finite sample, per component, the finite max and min samples of the bucket
-(lowest index on ties) are retained.
+(lowest index on ties) are retained. A sample is finite only when all its components are finite.
 
-Evidence: bucket count, number of buckets with finite samples.
+Evidence: `buckets` (how many exist), `buckets_with_finite` (how many contain a finite sample under the membership
+rule above), `interval`, `origin`. If the interval is so small relative to the timestamps that `δ ≥ 0.5`, or bucket
+numbers would exceed 2^52, the requirement is `not_applicable` with the reason recorded.
 
 ## local_extrema (prominence p, separation s, kind)
 
@@ -89,6 +96,17 @@ the confirming sample j) are retained. Running steps 1–5 on the reconstruction
 crossings, with times equal within `τ + 4·ulp(max(|t[i]|, |t[i+1]|))`.
 
 Evidence: count by edge, list of `{t, edge, index_before}` (up to 256), `pending_at_end`, count of `gap` flips.
+
+`pending_at_end` and the `gap` flip count are **step-4 values**: they describe what the state machine saw, before the
+step-5 edge filter removed anything. Implementations may additionally report the edge-filtered counterparts as
+`pending_at_end_edge` and `gap_flips_accepted`, but the two step-4 fields are the ones compared between compiler and
+verifier.
+
+Retention covers every **candidate**, not only the reported ones: the bracketing pair of every step-3 flip (and its
+confirming sample when H > 0) is retained, including flips that debounce or the edge filter later discards. Without
+this, a rejected excursion can reappear in the reconstruction as a crossing the source never had. The same rule
+applies to `violation`: the boundary pairs of every candidate run are retained, while the `worst` sample is retained
+only for runs that survive `min_duration`.
 
 ## violation (above A | below B, min_duration m)
 
