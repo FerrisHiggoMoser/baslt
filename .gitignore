@@ -1,0 +1,13 @@
+.venv*/
+__pycache__/
+*.pyc
+.pytest_cache/
+.hypothesis/
+dist/
+build/
+*.egg-info/
+bench-out/
+benchmarks/out/
+examples/out/
+*.baslt
+!tests/golden/*.baslt
