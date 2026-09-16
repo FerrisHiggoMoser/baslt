@@ -21,8 +21,9 @@ own unit table and its own simple reference algorithms, and may not import the c
 | `structure.invariants` | artifact | Per signal: `t` finite and non-decreasing, `idx` strictly increasing and `< n_source`, equal lengths, role bits within the legend, `extent` on the first and last source index. |
 | `structure.size` | artifact | `manifest.artifact.size_bytes` equals the file size and does not exceed `max_bytes`. |
 | `structure.policy` | artifact | The embedded policy hashes to its recorded sha256, which matches the manifest. |
-| `structure.bind` | artifact | Re-binding the embedded policy with the verifier's own unit table reproduces every bound parameter in `index.json`. |
+| `structure.bind` | artifact | Re-binding the embedded policy with the verifier's own unit table reproduces every bound parameter in `index.json`, for requirements and events. |
 | `<requirement id>.<aspect>` | varies | Per-contract checks below. |
+| `events.<name>.<aspect>`, `sync_groups.<name>.alignment` | varies | Event and sync-group checks below. |
 | `source.digest` | source | The source digest matches (a sampled digest is reported as a fingerprint, never as sha256). |
 | `source.samples` | source | Every retained `(t, v)` is bit-identical to the source at its index. |
 
@@ -33,15 +34,18 @@ own unit table and its own simple reference algorithms, and may not import the c
 | global_extrema | `max`, `min` | attested | Flagged samples exist, equal the manifest values bitwise, and no retained sample exceeds them. |
 | window_extrema | `buckets` | attested | Each flagged bucket's flagged max/min equal the retained max/min of that bucket. |
 | local_extrema | `prominence` | artifact | Each claimed peak and its bases are retained and the artifact prominence is at least `p`. |
-| local_extrema | `separation` | artifact | Claimed peaks respect the separation rule. |
+| local_extrema | `separation` | artifact | Listed peaks of the same kind and component are at least `separation` apart. |
+| local_extrema | `peaks` | source | The source's peaks are exactly the claimed ones, with the claimed counts, and all are retained. |
 | threshold_crossing | `brackets` | artifact | Every claimed crossing has adjacent retained source indices that straddle `V`. |
 | threshold_crossing | `fidelity` | artifact | The verifier's own detector on the reconstruction returns exactly the claimed crossings within tolerance. |
 | violation | `runs` | artifact | Boundary pairs straddle the limit, durations meet `min_duration`, the worst sample lies inside. |
 | violation | `fidelity` | artifact | Detection on the reconstruction returns exactly the claimed runs. |
 | state_transitions | `transitions` | artifact | Hold transitions over retained samples equal the flagged transitions. |
-| event | `trigger`, `windows` | artifact | Trigger bracket valid; each window is a contiguous run of source indices covering `[τ − before, τ + after]` plus one neighbour each side. |
+| event | `trigger` | artifact | Detecting the event on the retained samples returns the claimed `found` count, `pending_at_end` and selected triggers (times within tolerance, bracket indices exact), and every bracket sample carries the trigger role. An `expect` mismatch must be marked `warn`. |
+| event | `windows` | artifact | The window count is the selected triggers times the non-empty listed signals; each listed window is a contiguous run of retained source samples carrying the window role, bounded by samples outside the window (or the signal's ends), with the right `clipped` flag. |
+| event | `source` | source | Triggers and window bounds recomputed from the source match the claims. |
 | trajectory | `sed` | attested | Knots present, claimed `max_sed ≤ ε`, linked signals aligned or bracketed at every knot. |
-| sync_group | `alignment` | artifact | Every propagating timestamp present bitwise in every member or bracketed; unaligned count matches. |
+| sync_group | `alignment` | artifact | Every propagating timestamp inside a member's span is present bitwise (with the group's role) or bracketed by two retained samples with consecutive source indices (both with the role); `propagating`, `aligned`, `unaligned` and `out_of_range` match, and the status is `warn` exactly when something is unaligned. |
 | budget | `accounting` | artifact | Required + discretionary + overhead bytes equal the file size. |
 
 With `--source` the attested checks are recomputed: extrema with `nanmax`/`nanmin`, peaks with a naive prominence scan,

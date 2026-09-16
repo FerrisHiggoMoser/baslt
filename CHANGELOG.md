@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Local extrema with prominence and separation, checked independently on the retained samples.
+- Events (falling, rising and equals triggers with windows) and sync groups, with verifier checks.
 - MATLAB MAT-file sources, v5 through scipy and v7.3 through h5py, including Simulink structure-with-time logs.
 - `baslt policy init` writes a starter policy that compiles as written.
 - The rocket example writes MAT-files in both versions.

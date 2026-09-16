@@ -98,6 +98,21 @@ the strings `"NaN"`, `"Infinity"`, `"-Infinity"`).
 Every element of every list has the same keys, so MATLAB `jsondecode` returns struct arrays. `labels` is an empty
 list for non-enum signals. Signals sharing a clock point their `t` descriptor at the same member.
 
+`index.json` also lists the bound events and sync groups, always present (empty lists when the policy has none):
+
+```json
+"events": [
+  {"name": "MECO", "signal": "prop/thrust", "condition": "falls_below", "value": 100.0, "hysteresis": 0.0,
+   "debounce": 0.25, "occurrence": "first", "expect": 1, "before": 2.0, "after": 3.0,
+   "signals": ["aero/q", "aero/alpha"], "severity": "info"}
+],
+"sync_groups": [{"name": "aero", "members": ["aero/q", "aero/alpha"]}]
+```
+
+`value` is in the trigger signal's unit; for `equals` it is the value as written (a number or a label). Durations
+are seconds. The role bits of an event or group are found through each signal's `roles` legend
+(`event.<name>#trigger`, `event.<name>#window`, `sync.<name>`).
+
 ## Array encodings
 
 An array descriptor gives `n` elements × `components` of element type `dtype` (NumPy notation: `<f8`, `<f4`, `<i8`,
@@ -139,7 +154,9 @@ Rules that keep every reader exact:
              "bytes": 72100, "soft_max_abs_err": 12.5}]},
   "requirements": [{"id": "hard.q_dyn.global_extrema", "signal": "q_dyn", "op": "global_extrema",
                     "severity": "info", "status": "pass", "evidence": {}}],
-  "events": [], "trajectories": [], "sync_groups": []
+  "events": [{"name": "MECO", "signal": "prop/thrust", "severity": "info", "status": "pass", "evidence": {}}],
+  "trajectories": [],
+  "sync_groups": [{"name": "aero", "status": "warn", "evidence": {}}]
 }
 ```
 

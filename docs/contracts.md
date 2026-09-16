@@ -65,7 +65,9 @@ Peaks (maxima; minima are peaks of `-x`):
 Guarantee: every peak surviving steps 1–4 is retained, together with its left and right base samples. Only these
 claimed peaks are guaranteed; the reconstruction may show other bumps.
 
-Evidence: count of claimed maxima/minima, list of `{index, t, value, prominence}` (up to 256).
+Evidence: `maxima`, `minima` (exact counts), `peaks`: a list of `{index, t, value, prominence, kind, component}`
+(up to 256, sorted by index), and the bound `prominence` and `separation`. A signal with no finite sample is
+`not_applicable`; otherwise the requirement passes, with zero peaks if there are none.
 Roles: `#peak`, `#base`.
 
 ## threshold_crossing (V, edge, hysteresis H, debounce D, tolerance τ, interpolate)
@@ -142,9 +144,23 @@ Window per listed signal S: `lo = first index with t ≥ τ − before`, `hi = l
 every source sample in `[max(lo − 1, 0), min(hi + 1, n − 1)]`. Overlapping windows merge. Windows past a signal's
 extent are clipped and marked `clipped`.
 
-Guarantee: the trigger's bracketing samples are retained, and every source sample of every window is retained.
+Guarantee: the bracketing samples of **every candidate** trigger are retained (for crossing triggers, every flip
+of step 3, as for threshold_crossing; for `equals`, every run start and the sample before it), so detecting the
+event again on the retained samples finds exactly the source's triggers. Every source sample of every window around
+a selected trigger is retained.
 
-Evidence: occurrences found, triggers kept `{t, at_start}`, windows `{signal, start, end, samples, clipped}`.
+The window range of one trigger on one signal is always kept as computed, even when windows overlap, so the evidence
+lists one window per (selected trigger, listed signal) pair; the retained samples are their union. A signal with no
+samples gets no window.
+
+Status: `warn` when `expect` is set and differs from the number found; `not_applicable` when the trigger signal
+has fewer than two finite samples (crossing triggers) or none (`equals`); otherwise `pass`, including when the event
+never happened. The trigger signal must be scalar, and `equals` needs a discrete signal; a text value must be one of
+the signal's labels.
+
+Evidence: `condition`, `value`, `occurrence`, `expect`, `found` (triggers before selection), `pending_at_end` (the
+step-4 flag), `triggers` (selected, up to 256) as `{t, index_before, index_after, at_start, gap}`, `windows` (up to
+256) as `{signal, trigger, start, end, samples, clipped}`, and the exact `windows_total`.
 Roles: `event.<name>#trigger`, `event.<name>#window`.
 
 ## trajectories (ε, max_time_error Δt, linked)
@@ -168,16 +184,33 @@ Roles: `trajectory.<name>#knot`, `link.<name>`.
 
 ## sync groups
 
-Propagating timestamps of a group: every retained timestamp of every member that carries a hard, event, knot or soft
-role. For each propagating timestamp T and each member M: if M has a sample with timestamp exactly T (bitwise), it is
-retained; otherwise the pair of samples bracketing T is retained and counted as `unaligned`. Samples added by
-propagation do not propagate again. Soft timestamps are chosen once per group from the union of member picks.
+Propagating timestamps of a group: the distinct (bitwise) timestamps of every retained sample of every member that
+carries a propagating role, taken before any group runs. Every role propagates except `extent`, `gap`, `sync.*`
+and `link.*`: today that is hard requirement and event roles; trajectory knots and soft picks join them when those
+layers exist. Soft timestamps are chosen once per group from the union of member picks.
 
-Guarantee: every propagating timestamp is either present in every member or bracketed, and the unaligned count is
-exact.
+For each propagating timestamp T and each member M (including the member T came from):
 
-Evidence: propagating timestamps, aligned, unaligned. Status is WARN when unaligned > 0.
+- T outside M's time span `[t[0], t[n−1]]`: nothing is retained, and the pair counts as `out_of_range`;
+- M has a sample with timestamp exactly T (bitwise): the first such sample is retained (`aligned`);
+- otherwise the two samples bracketing T are retained (`unaligned`).
+
+Samples added by propagation carry only the group's role and do not propagate again, so one pass over all groups is
+the whole step.
+
+Guarantee: every propagating timestamp inside a member's span is either present in that member or bracketed by two
+adjacent source samples, and the three counts are exact.
+
+Evidence: `members`, `propagating`, `aligned`, `unaligned`, `out_of_range` (the last three count
+(timestamp, member) pairs). Status is `warn` when `unaligned` > 0.
 Role: `sync.<name>`.
+
+## Detection on supersets
+
+Crossings, violations and event triggers retain every candidate (every flip bracket and confirming sample, every
+candidate run's boundary pairs, every candidate trigger). Detecting them again on any superset of the retained
+samples therefore gives exactly the source's result. Samples added by events, sync groups and, later, the soft layer
+never create or hide one, so the compiler needs no repair step for them; a property test enforces this.
 
 ## Statuses
 

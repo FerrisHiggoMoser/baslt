@@ -15,8 +15,9 @@ per run, so a sweep of thousands of runs can be triaged in a browser without ope
 ## Available now
 
 The first end-to-end compiler supports NumPy arrays, CSV, HDF5 and MATLAB MAT-files (v5 to v7.3, including
-Simulink "structure with time" logs), with global and window extrema, threshold crossings, violations and discrete
-state transitions. `compile`, `verify`, `inspect` and `policy init` are available in the CLI. Compilation verifies
+Simulink "structure with time" logs), with global, window and local extrema (prominence and separation), threshold
+crossings, violations, discrete state transitions, events with windows around their triggers, and sync groups that
+keep related signals sampled at the same instants. `compile`, `verify`, `inspect` and `policy init` are available in the CLI. Compilation verifies
 its output before writing it. Unsupported policy features produce an explicit error.
 
 ```sh
