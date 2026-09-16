@@ -23,7 +23,6 @@ if TYPE_CHECKING:
 TIME_SIBLINGS: tuple[str, ...] = ("t", "time", "Time", "timestamp", "tout")
 HDF5_SIGNATURE = b"\x89HDF\r\n\x1a\n"
 SNIFF_BYTES = 8192
-MAT_UNAVAILABLE = "MAT-file support is not available yet"
 
 
 @runtime_checkable
@@ -70,9 +69,10 @@ class AdapterEntry:
 
 
 _REGISTRY: dict[str, AdapterEntry] = {}
-_ALIASES: dict[str, str] = {"h5": "hdf5", "hdf": "hdf5", "he5": "hdf5", "tsv": "csv", "txt": "csv", "memory": "numpy"}
-_UNAVAILABLE: dict[str, str] = {"mat": MAT_UNAVAILABLE, "mat73": MAT_UNAVAILABLE}
-_UNAVAILABLE_EXTENSIONS: dict[str, str] = {".mat": "mat"}
+_ALIASES: dict[str, str] = {
+    "h5": "hdf5", "hdf": "hdf5", "he5": "hdf5", "tsv": "csv", "txt": "csv", "memory": "numpy",
+    "mat73": "mat", "matlab": "mat",
+}
 
 
 def register_adapter(
@@ -106,13 +106,13 @@ def adapter_class(format: str) -> type:
     key = _format_key(format)
     entry = _REGISTRY.get(key)
     if entry is None:
-        if key in _UNAVAILABLE:
-            raise UsageError(_UNAVAILABLE[key])
         raise UsageError(f"unknown source format {format!r}; expected one of {', '.join(_REGISTRY)}")
     return entry.load()
 
 
 register_adapter("numpy", "baslt.sources.numpy_src:NumpySource", (), sniffs=False)
+# MAT before HDF5: a v7.3 MAT-file is also a valid HDF5 file, but its dimensions are reversed.
+register_adapter("mat", "baslt.sources.mat_src:MatSource", (".mat",))
 register_adapter("hdf5", "baslt.sources.hdf5_src:Hdf5Source", (".h5", ".hdf5", ".he5"))
 register_adapter("csv", "baslt.sources.csv_src:CsvSource", (".csv", ".tsv", ".txt"))
 
@@ -153,14 +153,9 @@ def open_source(source: str | os.PathLike[str] | Mapping[str, Any] | Run, *, for
             cls = entry.load()
             _require_file(path)
             return _construct(cls, path, options)
-    unavailable = _UNAVAILABLE_EXTENSIONS.get(suffix)
-    if unavailable is not None and unavailable not in _REGISTRY:
-        raise UsageError(_UNAVAILABLE[unavailable])
 
     _require_file(path)
     head = read_head(path)
-    if head.startswith(b"MATLAB") and "mat" not in _REGISTRY:
-        raise UsageError(MAT_UNAVAILABLE)
     for entry in _REGISTRY.values():
         if not entry.sniffs:
             continue

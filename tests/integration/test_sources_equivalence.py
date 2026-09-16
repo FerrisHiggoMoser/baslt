@@ -123,24 +123,25 @@ def test_time_column_names_agree_across_formats(tmp_path):
 
 
 @pytest.mark.parametrize("name", ["run.mat", "RUN.MAT"])
-def test_mat_files_are_not_supported_yet(tmp_path, name):
+def test_mat_extension_selects_the_mat_reader(tmp_path, name):
+    from baslt.sources.mat_src import MatSource
+
     path = tmp_path / name
     path.write_bytes(b"MATLAB 5.0 MAT-file" + b"\x00" * 200)
-    with pytest.raises(UsageError, match="^MAT-file support is not available yet$"):
-        open_source(path)
-    with pytest.raises(UsageError, match="MAT-file support is not available yet"):
+    assert isinstance(open_source(path), MatSource)
+    with pytest.raises(SourceError, match="source file not found"):
         open_source(tmp_path / "missing.mat")
 
 
-def test_mat_by_format_or_header(tmp_path):
+def test_mat_by_format_alias_or_header(tmp_path):
+    from baslt.sources.mat_src import MatSource
+
     path = tmp_path / "run.bin"
     path.write_bytes(b"MATLAB 7.3 MAT-file, Platform: GLNXA64" + b"\x00" * 600)
-    with pytest.raises(UsageError, match="MAT-file support is not available yet"):
-        open_source(path)
-    with pytest.raises(UsageError, match="MAT-file support is not available yet"):
-        open_source(path, format="mat")
-    with pytest.raises(UsageError, match="MAT-file support is not available yet"):
-        open_source(path, format="mat73")
+    assert isinstance(open_source(path), MatSource)
+    for alias in ("mat", "mat73", "MATLAB"):
+        assert isinstance(open_source(path, format=alias), MatSource)
+    assert base.available_formats()[:2] == ["numpy", "mat"]  # MAT is sniffed before plain HDF5
 
 
 def test_missing_files_and_directories(tmp_path):

@@ -1,4 +1,4 @@
-"""Source adapters: open simulation output (in-memory arrays, CSV, HDF5) as runs of signals.
+"""Source adapters: open simulation output (in-memory arrays, CSV, HDF5, MAT-files) as runs of signals.
 
 Importing this package does not import numpy; adapters load when a format is first used.
 """
@@ -13,6 +13,7 @@ _LAZY: dict[str, str] = {
     "NumpySource": "baslt.sources.numpy_src",
     "CsvSource": "baslt.sources.csv_src",
     "Hdf5Source": "baslt.sources.hdf5_src",
+    "MatSource": "baslt.sources.mat_src",
 }
 
 __all__ = ["SourceAdapter", "adapter_class", "available_formats", "open_source", "register_adapter", *_LAZY]

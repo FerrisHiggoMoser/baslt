@@ -111,6 +111,19 @@ Time association order: `time_hints[name]` → dataset attribute `time`/`t` → 
 `timestamp` or `tout` in the same group/struct → `global_time` → top-level `tout` → `SourceError`. Time signals
 themselves are not listed as data signals.
 
+Registered formats, in sniffing order: `mat` (aliases `mat73`, `matlab`), `hdf5`, `csv`; `numpy` is chosen for
+in-memory input. MAT comes before HDF5 because a v7.3 MAT-file is also a valid HDF5 file, with reversed dimensions.
+
+MAT-files (`sources/mat_src.py`, `sources/matv73.py`): versions 4–7.2 are read with `scipy.io.loadmat` using MATLAB's
+own types (integer-valued doubles stay doubles); a file that holds complex data is read a second time with native
+types only to skip those values, because scipy would otherwise cast them to real. Version 7.3 files are read with
+h5py: dimensions are reversed back, `MATLAB_class` decides the type, char arrays are UTF-16, cells and struct arrays
+follow object references into `#refs#`, and contiguous datasets are memory-mapped. Both build one tree that is
+flattened the same way: struct fields become `s/q`, struct array elements `s/1/q`, cell arrays of character vectors
+become discrete string signals, and a Simulink "structure with time" (`time` plus `signals`) becomes one signal per
+element named by its label and timed by its own `time`. Scalars, char arrays and empty values are not signals;
+MATLAB objects, sparse, complex and 3-D arrays are skipped and listed in `Run.meta.issues`. MAT-files have no units.
+
 ### `baslt.policy`
 
 ```python
