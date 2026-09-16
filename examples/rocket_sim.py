@@ -8,6 +8,7 @@ Write a run to disk:
 
     python examples/rocket_sim.py --format h5 --out examples/out/run.h5
     python examples/rocket_sim.py --format csv --out examples/out/run.csv --anomaly q_spike
+    python examples/rocket_sim.py --format mat73 --out examples/out/run.mat
 """
 
 from __future__ import annotations
@@ -247,13 +248,91 @@ def write_h5(path: str | Path, data: Mapping[str, np.ndarray], *, chunked: bool 
     return path
 
 
+MAT73_HEADER_TEXT = b"MATLAB 7.3 MAT-file, Platform: GLNXA64, Created on: Thu Jan  1 00:00:00 1970 HDF5 schema 1.00 ."
+MATLAB_CLASSES: dict[str, str] = {
+    "f8": "double", "f4": "single", "i1": "int8", "u1": "uint8", "i2": "int16", "u2": "uint16",
+    "i4": "int32", "u4": "uint32", "i8": "int64", "u8": "uint64",
+}
+
+
+def mat_tree(data: Mapping[str, np.ndarray]) -> dict:
+    """Nest "group/name" keys into structs; the clock "t" becomes the top-level "tout" Simulink writes."""
+    tree: dict = {}
+    for key in _ordered(data):
+        parts = ["tout"] if key == "t" else key.split("/")
+        node = tree
+        for part in parts[:-1]:
+            node = node.setdefault(part, {})
+        node[parts[-1]] = np.asarray(data[key])
+    return tree
+
+
+def write_mat(path: str | Path, data: Mapping[str, np.ndarray], *, version: str = "5",
+              compression: bool = True) -> Path:
+    """Write a MATLAB MAT-file with a top-level "tout" clock and one struct per signal group.
+
+    version "5" uses scipy (readable by every MATLAB release); "7.3" writes MATLAB's HDF5 layout with h5py.
+    MAT-files hold no units, so a policy for this file declares them under signals.decl.
+    """
+    path = Path(path)
+    tree = mat_tree(data)
+    if version == "5":
+        try:
+            import scipy.io
+        except ImportError:
+            raise SystemExit("writing MAT-files needs scipy (pip install scipy)") from None
+        scipy.io.savemat(path, tree, oned_as="column", do_compression=compression, long_field_names=True)
+    elif version == "7.3":
+        _write_mat73(path, tree, compression)
+    else:
+        raise ValueError(f"unknown MAT-file version {version!r}; expected '5' or '7.3'")
+    return path
+
+
+def _write_mat73(path: Path, tree: Mapping, compression: bool) -> None:
+    try:
+        import h5py
+    except ImportError:
+        raise SystemExit("writing MAT-files needs h5py (pip install h5py)") from None
+    with h5py.File(path, "w", userblock_size=512, track_order=True) as f:
+        for name, value in tree.items():
+            _write_mat73_node(f, name, value, compression, h5py)
+    header = MAT73_HEADER_TEXT.ljust(116, b" ") + b"\x00" * 8 + b"\x00\x02" + b"IM"
+    with open(path, "r+b") as fh:
+        fh.write(header)
+
+
+def _write_mat73_node(group, name: str, value, compression: bool, h5py) -> None:
+    if isinstance(value, Mapping):
+        sub = group.create_group(name, track_order=True)
+        sub.attrs["MATLAB_class"] = np.bytes_("struct")
+        for key, child in value.items():
+            _write_mat73_node(sub, key, child, compression, h5py)
+        fields = np.empty(len(value), dtype=object)
+        for i, key in enumerate(value):
+            fields[i] = np.frombuffer(key.encode("ascii"), dtype="S1")
+        sub.attrs.create("MATLAB_fields", fields, dtype=h5py.vlen_dtype(np.dtype("S1")))
+        return
+    arr = np.asarray(value)
+    logical = arr.dtype == np.bool_
+    if logical:
+        arr = arr.astype(np.uint8)
+    matlab = arr.reshape(-1, 1) if arr.ndim == 1 else arr  # MATLAB column vectors are n-by-1
+    stored = np.ascontiguousarray(matlab.T)  # HDF5 dimensions are MATLAB's, reversed
+    options = {"compression": "gzip", "compression_opts": 3} if compression and stored.size >= 64 else {}
+    dset = group.create_dataset(name, data=stored, **options)
+    dset.attrs["MATLAB_class"] = np.bytes_("logical" if logical else MATLAB_CLASSES[arr.dtype.str[1:]])
+    if logical:
+        dset.attrs["MATLAB_int_decode"] = np.int32(1)
+
+
 # --------------------------------------------------------------------------------------------------------------
 # Command line
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Write a synthetic rocket ascent run to CSV or HDF5.")
-    parser.add_argument("--format", choices=("csv", "h5", "hdf5"), required=True)
+    parser = argparse.ArgumentParser(description="Write a synthetic rocket ascent run to CSV, HDF5 or a MATLAB MAT-file.")
+    parser.add_argument("--format", choices=("csv", "h5", "hdf5", "mat", "mat73"), required=True)
     parser.add_argument("--out", type=Path, required=True, help="output file path")
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--duration", type=float, default=120.0, help="seconds")
@@ -270,6 +349,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     args.out.parent.mkdir(parents=True, exist_ok=True)
     if args.format == "csv":
         write_csv(args.out, data)
+    elif args.format in ("mat", "mat73"):
+        write_mat(args.out, data, version="7.3" if args.format == "mat73" else "5")
     else:
         write_h5(args.out, data, chunked=args.chunked, compression=args.compression)
     print(f"wrote {args.out} ({data['t'].size} samples, {args.out.stat().st_size} bytes)")
