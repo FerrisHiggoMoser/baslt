@@ -1,4 +1,4 @@
-"""`verify_artifact`: every check of docs/verification.md for the five operators of this milestone.
+"""`verify_artifact`: every check of docs/verification.md for the operators this build compiles.
 
 The verifier starts from the file and works outwards. `structure.py` establishes that the bytes are an artifact and
 that the parameters it was compiled with are the policy's own. This module then takes each requirement the manifest
@@ -64,6 +64,7 @@ EVIDENCE_LIMIT = 256  # docs/container.md: evidence lists hold at most 256 items
 
 SUPPORTED_OPS: tuple[str, ...] = (
     "global_extrema",
+    "local_extrema",
     "window_extrema",
     "threshold_crossing",
     "violation",
@@ -73,6 +74,7 @@ SUPPORTED_OPS: tuple[str, ...] = (
 # Parameter defaults of docs/policy.md, applied when index.json records only the parameters that were written.
 PARAM_DEFAULTS: dict[str, dict[str, object]] = {
     "global_extrema": {},
+    "local_extrema": {"separation": 0.0, "kind": "both"},
     "window_extrema": {"origin": 0.0},
     "threshold_crossing": {
         "edge": "both",
@@ -85,6 +87,7 @@ PARAM_DEFAULTS: dict[str, dict[str, object]] = {
     "state_transitions": {},
 }
 REQUIRED_PARAMS: dict[str, tuple[str, ...]] = {
+    "local_extrema": ("prominence",),
     "window_extrema": ("interval",),
     "threshold_crossing": ("value",),
 }
@@ -496,6 +499,175 @@ def _extremum_problems(
         elif int(wanted) != int(index):
             problems.append(f"{where}: the source's {aspect} is sample {int(wanted)}, not {int(index)}")
     return problems, claimed_text, measured_text
+
+
+# --- local_extrema -----------------------------------------------------------------------------------------
+
+
+def _peak_column(values: np.ndarray, finite: np.ndarray, component: int) -> np.ndarray:
+    """One component as float64, NaN wherever the sample is not finite in every component."""
+    column = np.asarray(values if values.ndim == 1 else values[:, component], dtype=np.float64)
+    return np.where(finite, column, np.nan) if values.ndim == 2 else column
+
+
+def _peak_labels(kind: object) -> tuple[str, ...]:
+    return ("max", "min") if kind == "both" else (str(kind),)
+
+
+def _local_extrema_checks(
+    view: SignalView,
+    req_id: str,
+    bits: Mapping[str, int],
+    params: Mapping,
+    evidence: Mapping,
+    src: SourceSignal | None,
+) -> list[Check]:
+    prominence = _float(params.get("prominence"), float("nan"))
+    separation = _float(params.get("separation"), 0.0)
+    kind = params.get("kind") or "both"
+    if kind not in reference.PEAK_KINDS:
+        return [Check(f"{req_id}.prominence", FAIL, NO_BASIS, message=f"unknown kind {kind!r}")]
+    if not np.isfinite(prominence) or prominence < 0 or not np.isfinite(separation) or separation < 0:
+        return [Check(f"{req_id}.prominence", FAIL, NO_BASIS,
+                      message=f"bound prominence {params.get('prominence')!r} or separation "
+                              f"{params.get('separation')!r} is not a non-negative number")]
+    labels = _peak_labels(kind)
+    items = [item for item in evidence.get("peaks", []) or [] if isinstance(item, dict)]
+    counts = {label: evidence.get("maxima" if label == "max" else "minima") for label in ("max", "min")}
+    total = sum(c for c in counts.values() if isinstance(c, int) and not isinstance(c, bool))
+
+    flagged = view.flagged(bits.get("peak"))
+    positions = np.flatnonzero(flagged)
+    finite = view.finite()
+    prominences: dict[tuple[int, str], np.ndarray] = {}
+    for component in range(view.components):
+        column = _peak_column(view.v, finite, component)
+        for label in labels:
+            prominences[(component, label)] = reference.prominences_at(column if label == "max" else -column,
+                                                                        positions)
+
+    problems: list[str] = []
+    if positions.size > total:
+        problems.append(f"{positions.size} samples carry the peak role, more than the {total} peaks claimed")
+    if total and not positions.size:
+        problems.append(f"{total} peaks are claimed but no sample carries the peak role")
+    if total and not np.any(view.flagged(bits.get("base"))):
+        problems.append("peaks are claimed but no sample carries the base role")
+    valid = np.zeros(positions.size, dtype=bool)
+    for measured in prominences.values():
+        valid |= measured >= prominence
+    if not valid.all():
+        bad = positions[~valid]
+        problems.append(
+            f"{bad.size} flagged peak(s) are not peaks of prominence >= {prominence!r} on the retained samples, "
+            f"first at source sample {view.source_index(int(bad[0]))}"
+        )
+    for item in items:
+        index, component, label = item.get("index"), item.get("component", 0), item.get("kind")
+        where = f"peak at source sample {index!r}"
+        at = view.position(index)
+        if at < 0 or not flagged[at]:
+            problems.append(f"{where}: claimed but not retained with the peak role")
+            continue
+        if not isinstance(component, int) or not 0 <= component < view.components or label not in labels:
+            problems.append(f"{where}: component {component!r} or kind {label!r} does not match the requirement")
+            continue
+        if not _same_scalar(item.get("t"), view.t[at]):
+            problems.append(f"{where}: t is {view.t[at]!r} in the artifact but {item.get('t')!r} in the manifest")
+        if not _same_scalar(item.get("value"), view.column(component)[at]):
+            problems.append(f"{where}: value differs between the artifact and the manifest")
+        here = prominences[(component, label)][int(np.searchsorted(positions, at))]
+        claimed = _number(item.get("prominence"))
+        if claimed is None or claimed < prominence:
+            problems.append(f"{where}: claimed prominence {item.get('prominence')!r} is below {prominence!r}")
+        elif not here >= claimed:
+            problems.append(
+                f"{where}: prominence on the retained samples is {here!r}, below the claimed {claimed!r}; "
+                "a base sample is missing"
+            )
+    checks = [
+        verdict(
+            f"{req_id}.prominence",
+            problems,
+            basis=BASIS_ARTIFACT,
+            claimed=str(total),
+            measured=str(int(positions.size)),
+            allowed=f">= {prominence!r}",
+            message="every flagged peak keeps at least its prominence on the retained samples",
+        )
+    ]
+
+    if separation > 0:
+        spacing: list[str] = []
+        groups: dict[tuple[int, str], list[float]] = {}
+        for item in items:
+            number = _number(item.get("t"))
+            if number is not None:
+                groups.setdefault((item.get("component", 0), item.get("kind")), []).append(number)
+        for (component, label), times in groups.items():
+            times.sort()
+            gaps = np.diff(times)
+            if gaps.size and gaps.min() < separation:
+                spacing.append(f"two claimed {label} peaks of component {component} are {gaps.min()!r} s apart")
+        complete = len(items) == total
+        checks.append(
+            verdict(
+                f"{req_id}.separation",
+                spacing,
+                basis=BASIS_ARTIFACT,
+                claimed=_fmt_seconds(separation),
+                measured=str(len(items)),
+                allowed=_fmt_seconds(separation),
+                message="claimed peaks keep the separation"
+                + ("" if complete else f" ({len(items)} of {total} peaks are listed in the manifest)"),
+            )
+        )
+
+    if src is not None:
+        checks.append(_local_extrema_source_check(view, req_id, src, prominence, separation, labels, counts, items))
+    return checks
+
+
+def _local_extrema_source_check(
+    view: SignalView,
+    req_id: str,
+    src: SourceSignal,
+    prominence: float,
+    separation: float,
+    labels: Sequence[str],
+    counts: Mapping[str, object],
+    items: Sequence[Mapping],
+) -> Check:
+    finite = reference.finite(src.v)
+    found: dict[tuple[int, str], list[int]] = {}
+    for component in range(1 if src.v.ndim == 1 else src.v.shape[1]):
+        column = _peak_column(src.v, finite, component)
+        for label in labels:
+            peaks = reference.local_peaks(src.t, column, prominence, separation, kind=label)
+            found[(component, label)] = [int(peak["index"]) for peak in peaks]
+    problems: list[str] = []
+    for label in labels:
+        expected = sum(len(v) for (c, lab), v in found.items() if lab == label)
+        if counts.get(label) != expected:
+            problems.append(f"the source has {expected} {label} peaks, the manifest claims {counts.get(label)!r}")
+    source_set = {index for indices in found.values() for index in indices}
+    for item in items:
+        key = (item.get("component", 0), item.get("kind"))
+        if item.get("index") not in found.get(key, []):
+            problems.append(f"the source has no {item.get('kind')} peak at sample {item.get('index')!r}")
+    missing = [index for index in source_set if view.position(index) < 0]
+    if missing:
+        problems.append(f"{len(missing)} source peak(s) are not retained, first at sample {min(missing)}")
+    total = sum(len(v) for v in found.values())
+    return verdict(
+        f"{req_id}.peaks",
+        problems,
+        basis=BASIS_SOURCE,
+        claimed=str(sum(c for c in counts.values() if isinstance(c, int) and not isinstance(c, bool))),
+        measured=str(total),
+        allowed="0",
+        message="the source's peaks are exactly the claimed ones and all are retained",
+    )
 
 
 # --- window_extrema ----------------------------------------------------------------------------------------
@@ -1341,6 +1513,8 @@ def _requirement_checks(
 
     if op == "global_extrema":
         return _global_extrema_checks(view, req_id, bits, evidence, src)
+    if op == "local_extrema":
+        return _local_extrema_checks(view, req_id, bits, params, evidence, src)
     if op == "window_extrema":
         return _window_extrema_checks(view, req_id, bits, params, evidence, src)
     if op == "threshold_crossing":

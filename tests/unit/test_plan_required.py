@@ -238,7 +238,11 @@ def test_operator_parameter_errors_become_policy_errors():
 # ----- rejected policies ----------------------------------------------------------------------
 
 
-def test_unsupported_operator_is_named():
+def test_unsupported_operator_is_named(monkeypatch):
+    # every operator the policy schema allows is implemented, so simulate a build without one
+    from baslt.plan import required
+
+    monkeypatch.delitem(required.OP_EVALUATORS, "local_extrema")
     run = make_run(q=wave())
     with pytest.raises(UsageError) as exc:
         plan_of(run, hard={"q": {"local_extrema": {"prominence": 1.0}}})

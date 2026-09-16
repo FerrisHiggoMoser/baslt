@@ -655,8 +655,8 @@ def test_an_unsupported_operator_is_refused():
         for entry in index["signals"]:
             for item in entry["requirements"]:
                 if item["id"] == "hard.q_dyn.global_extrema":
-                    item["op"] = "local_extrema"
-        requirement(manifest, "hard.q_dyn.global_extrema")["op"] = "local_extrema"
+                    item["op"] = "made_up_operator"
+        requirement(manifest, "hard.q_dyn.global_extrema")["op"] = "made_up_operator"
 
     expect_fail(build(edit=edit), "hard.q_dyn.global_extrema", fragment="not supported by this verifier")
 

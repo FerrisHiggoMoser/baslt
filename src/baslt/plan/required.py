@@ -18,7 +18,7 @@ give the requirement id itself, and the others suffix it, so `violation` occupie
 `hard.q_dyn.violation[0]#edge` and `hard.q_dyn.violation[0]#worst`. A `roles` bitmask is at most 64 bits
 wide (docs/container.md), so more than 64 roles on one signal is a PolicyError.
 
-This milestone implements five operators. A policy that asks for anything else -- another operator,
+This milestone implements six operators. A policy that asks for anything else -- another operator,
 events, trajectories, sync groups or the soft layer -- is rejected with a UsageError naming the feature
 instead of being compiled into an artifact that would silently not carry it.
 """
@@ -29,7 +29,14 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from ..errors import Issue, PolicyError, UsageError
-from ..ops import global_extrema, state_transitions, threshold_crossing, violation, window_extrema
+from ..ops import (
+    global_extrema,
+    local_extrema,
+    state_transitions,
+    threshold_crossing,
+    violation,
+    window_extrema,
+)
 from ..ops._common import extent_samples, gap_samples
 from ..sampleset import SampleSet
 
@@ -49,6 +56,7 @@ _MAIN_ONLY: tuple[str, ...] = (MAIN,)
 # Sub-roles every operator fills, in legend order (docs/contracts.md "Roles").
 OP_ROLES: dict[str, tuple[str, ...]] = {
     "global_extrema": _MAIN_ONLY,
+    "local_extrema": ("peak", "base"),
     "window_extrema": _MAIN_ONLY,
     "threshold_crossing": _MAIN_ONLY,
     "violation": ("edge", "worst"),
@@ -57,6 +65,7 @@ OP_ROLES: dict[str, tuple[str, ...]] = {
 
 OP_EVALUATORS = {
     "global_extrema": global_extrema.evaluate,
+    "local_extrema": local_extrema.evaluate,
     "window_extrema": window_extrema.evaluate,
     "threshold_crossing": threshold_crossing.evaluate,
     "violation": violation.evaluate,

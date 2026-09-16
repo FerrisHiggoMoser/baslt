@@ -33,6 +33,7 @@ __all__ = [
     "finite",
     "global_extrema",
     "local_peaks",
+    "prominences_at",
     "reconstruct_hold",
     "reconstruct_linear",
     "sed_max",
@@ -387,6 +388,39 @@ def _peaks_of(t: np.ndarray, y: np.ndarray, prominence: float, separation: float
             right_base[kept].tolist(),
         )
     ]
+
+
+def prominences_at(x, positions) -> np.ndarray:
+    """Prominence of `x` treated as a peak at each given position; NaN where that position is not a peak.
+
+    Used on retained samples: a claimed peak need not be the middle of its run there (retained neighbours may
+    merge into a plateau), so only run membership matters. The bases follow step 2 of the contract.
+    """
+    values = np.asarray(x, dtype=np.float64)
+    wanted = np.asarray(positions, dtype=np.int64)
+    out = np.full(wanted.shape[0], np.nan)
+    n = values.shape[0]
+    if n < 3 or wanted.size == 0:
+        return out
+    walled = np.where(np.isfinite(values), values, np.inf)
+    run_start = np.flatnonzero(np.concatenate(([True], walled[1:] != walled[:-1])))
+    run_value = walled[run_start]
+    runs = run_value.shape[0]
+    run_of = np.searchsorted(run_start, wanted, side="right") - 1
+    interior = (run_of > 0) & (run_of < runs - 1)
+    safe = np.clip(run_of, 1, max(runs - 2, 1))
+    is_peak = (interior & np.isfinite(run_value[safe])
+               & (run_value[safe - 1] < run_value[safe]) & (run_value[np.minimum(safe + 1, runs - 1)] < run_value[safe]))
+    if runs < 3 or not is_peak.any():
+        return out
+    candidates = np.unique(run_of[is_peak])
+    left = _base_runs(run_value, candidates)
+    mirrored = _base_runs(run_value[::-1], runs - 1 - candidates[::-1])
+    right = (runs - 1 - mirrored)[::-1]
+    prominence = run_value[candidates] - np.maximum(run_value[left], run_value[right])
+    lookup = dict(zip(candidates.tolist(), prominence.tolist()))
+    out[is_peak] = [lookup[r] for r in run_of[is_peak].tolist()]
+    return out
 
 
 def _base_runs(run_value: np.ndarray, candidates: np.ndarray) -> np.ndarray:
