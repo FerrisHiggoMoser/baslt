@@ -34,6 +34,7 @@ from baslt.container.spec import ArrayDesc, canonical_json, header_json
 from baslt.container.zipwriter import Member, write_zip
 from baslt.policy import load_policy
 from baslt.verify.checks import verify_artifact
+from reference.artifact_edit import settle
 
 pytestmark = pytest.mark.minimal
 
@@ -72,6 +73,7 @@ EXPECTED_IDS = (
     "hard.q_dyn.violation[0].runs",
     "hard.q_dyn.violation[0].fidelity",
     "hard.mode.state_transitions.transitions",
+    "budget.accounting",
 )
 
 
@@ -201,7 +203,8 @@ def build(*, debounce=0.0, dead=False, on_not_applicable="warn", digest=None, ed
         "artifact": {"size_bytes": "0" * 20, "max_bytes": 1048576, "ratio": "0.000000e+00",
                      "codec": "deflate", "level": 6},
         "budget": {"source": "policy", "required_bytes": 0, "discretionary_bytes": 0, "overhead_bytes": 0,
-                   "signals": []},
+                   "signals": [{"name": entry["name"], "retained": entry["n"], "hard": entry["n"], "soft": 0,
+                                "bytes": 0, "soft_max_abs_err": "0.000000e+00"} for entry in signals]},
         "requirements": _requirements(debounce, dead),
         "events": [], "trajectories": [], "sync_groups": [],
     }
@@ -219,11 +222,10 @@ def build(*, debounce=0.0, dead=False, on_not_applicable="warn", digest=None, ed
             *(Member(name, payloads[name], 8) for name in sorted(payloads)),
         ]
 
-    size = len(write_zip(members()))
-    manifest["artifact"]["size_bytes"] = f"{size:020d}"
-    manifest["artifact"]["ratio"] = f"{264 / size:.6e}"
-    data = write_zip(members())
-    assert len(data) == size
+    # The ratio has a fixed width, so it can be set from a first sizing without moving the size.
+    manifest["artifact"]["ratio"] = f"{264 / len(settle(members, manifest, index)):.6e}"
+    data = settle(members, manifest, index)
+    assert int(manifest["artifact"]["size_bytes"]) == len(data)
     return data
 
 
@@ -271,8 +273,10 @@ def _requirements(debounce: float, dead: bool) -> list[dict]:
     return requirements
 
 
-def rebuild(data, *, index=None, manifest=None, policy=None, arrays=None) -> bytes:
-    """Decode an artifact, mutate arrays or JSON, and re-encode it with valid CRCs and sizes."""
+def rebuild(data, *, index=None, manifest=None, policy=None, arrays=None, budget=True) -> bytes:
+    """Decode an artifact, mutate arrays or JSON, and re-encode it with valid CRCs and sizes.
+
+    With `budget` the byte accounting follows the re-encoded sizes; False keeps the budget exactly as edited."""
     artifact = read_artifact(data)
     index_obj = copy.deepcopy(artifact.index)
     manifest_obj = copy.deepcopy(artifact.manifest)
@@ -311,9 +315,7 @@ def rebuild(data, *, index=None, manifest=None, policy=None, arrays=None) -> byt
             parts.append(Member(entry.name, bytes(payloads.get(entry.name, artifact.members[entry.name])), 8))
         return parts
 
-    size = len(write_zip(members()))
-    manifest_obj["artifact"]["size_bytes"] = f"{size:020d}"
-    return write_zip(members())
+    return settle(members, manifest_obj, index_obj if budget else None)
 
 
 # --- helpers -----------------------------------------------------------------------------------------------

@@ -92,7 +92,9 @@ def bind(run: Run, **sections):
 
 
 def compile_demo(run: Run | None = None, **sections):
+    """Compile the demo run with the hard layer only, unless `sections` brings its own soft rules."""
     run = run if run is not None else demo_run()
+    sections.setdefault("soft", [{"match": "*", "priority": "none"}])
     bound = bind(run, hard=DEMO_HARD, **sections)
     digest = hash_arrays({name: sig.v for name, sig in run.signals.items()})
     return run, bound, compile_run(run, bound, digest=digest)

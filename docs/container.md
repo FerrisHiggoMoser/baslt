@@ -135,7 +135,8 @@ Rules that keep every reader exact:
 - `roles` is the narrowest of `|u1`, `<u2`, `<u4`, `<u8` that holds the legend. Bit k means legend entry with `bit`
   k. `<u8` roles are decoded as (low, high) uint32 pairs.
 - Booleans are stored as `|u1`. Enums are `<i4` codes into `labels`.
-- `soft_value_dtype: float32` stores `<f4` values only for signals with no hard, event or trajectory role.
+- `soft_value_dtype: float32` is reserved for `<f4` preview values; this build rejects it and stores values in their
+  source dtype.
 
 ## manifest.json (key fields)
 
@@ -151,7 +152,7 @@ Rules that keep every reader exact:
                "codec": "deflate", "level": 6},
   "budget": {"source": "policy", "required_bytes": 828412, "discretionary_bytes": 1155801,
              "overhead_bytes": 6120, "signals": [{"name": "q_dyn", "retained": 5231, "hard": 912, "soft": 4319,
-             "bytes": 72100, "soft_max_abs_err": 12.5}]},
+             "bytes": 72100, "soft_max_abs_err": "1.250000e+01"}]},
   "requirements": [{"id": "hard.q_dyn.global_extrema", "signal": "q_dyn", "op": "global_extrema",
                     "severity": "info", "status": "pass", "evidence": {}}],
   "events": [{"name": "MECO", "signal": "prop/thrust", "severity": "info", "status": "pass", "evidence": {}}],
@@ -163,6 +164,42 @@ Rules that keep every reader exact:
 `size_bytes` is a 20-digit zero-padded string and `ratio` is `%.6e` so the manifest's own length does not depend on
 the artifact size. `size_bytes` must equal the file length. Evidence lists hold at most 256 items; counts are always
 exact.
+
+`budget.source` is `policy`, `cli` (`--max-size`) or `none` (no budget, `max_bytes` null). `budget.signals` has one
+row per signal of `index.json`, in the same order:
+
+| Field | Meaning |
+|---|---|
+| `retained` | Retained samples, equal to the signal's `n`. |
+| `hard` | Samples the policy keeps without the soft layer. |
+| `soft` | `retained − hard`: samples kept only as preview, directly or through a sync group. |
+| `bytes` | Compressed size of the signal's `s/` member, plus its `t/` member when it is the first signal on that clock. |
+| `soft_max_abs_err` | Largest reconstruction error over the source, a 12-character `%.6e` string (`"         nan"` and `"         inf"` are allowed). |
+
+`required_bytes + discretionary_bytes` is the compressed size of all `s/` and `t/` members and
+`required_bytes + discretionary_bytes + overhead_bytes` is the file size. `contracts.md` defines each quantity.
+
+A retained sample's `soft` role marks a preview sample the soft layer chose; samples the policy keeps anyway never
+get it.
+
+### Infeasible-budget report
+
+When the hard layer does not fit, nothing is written and the error report (`--error-report`, or `<run>.error.json`
+from the pipeline API) carries:
+
+```json
+{"status": "error", "error": "InfeasibleBudget", "exit_code": 2, "kind": "infeasible_budget",
+ "max_bytes": 12288, "budget_source": "cli", "minimum_bytes": 24283, "excess_bytes": 11995,
+ "required_bytes": 20511, "overhead_bytes": 3772,
+ "requirements": [{"id": "hard.aoa.window_extrema", "signal": "aero/alpha", "op": "window_extrema",
+                   "samples": 241, "standalone_bytes": 3811}],
+ "signals": [{"name": "aero/alpha", "retained": 541, "hard": 541, "soft": 0, "bytes": 8312,
+              "soft_max_abs_err": "0.000000e+00"}],
+ "digest": {"algorithm": "sha256", "mode": "full", "covered_bytes": 8421000000, "value": "..."}}
+```
+
+`standalone_bytes` is the compressed size of a requirement's own samples alone; events are listed as
+`events.<name>`. `baslt explain` reads this report.
 
 ### policy.json
 

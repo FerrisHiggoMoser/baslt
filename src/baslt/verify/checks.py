@@ -1751,6 +1751,228 @@ def _sync_checks(
 # --- the whole pass ----------------------------------------------------------------------------------------
 
 
+# --- budget ------------------------------------------------------------------------------------------------
+
+BUDGET_SOURCES: tuple[str, ...] = ("policy", "cli", "none")
+BUDGET_BYTES: tuple[str, ...] = ("required_bytes", "discretionary_bytes", "overhead_bytes")
+BUDGET_COUNTS: tuple[str, ...] = ("retained", "hard", "soft", "bytes")
+DATA_PREFIXES: tuple[str, ...] = ("s/", "t/")
+ERROR_WIDTH = 12  # docs/container.md: soft_max_abs_err is a 12-character string
+ERROR_WORDS: dict[str, float] = {"nan": float("nan"), "inf": float("inf")}
+
+
+def _count(value: object) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        return None
+    return value
+
+
+def _error_value(value: object) -> float | None:
+    """The number a `soft_max_abs_err` string holds, or None when it is not one."""
+    if not isinstance(value, str) or len(value) != ERROR_WIDTH:
+        return None
+    word = value.strip()
+    if word in ERROR_WORDS:
+        return ERROR_WORDS[word]
+    try:
+        number = float(word)
+    except ValueError:
+        return None
+    return number if word == "%.6e" % number and number >= 0 else None
+
+
+def _role_masks(entry: Mapping) -> tuple[int, int]:
+    """Legend bits set by a contract (every role but `soft` and `sync.*`), and the `soft` bit as a mask."""
+    contract = soft = 0
+    for role in entry.get("roles", []) or []:
+        if not isinstance(role, dict):
+            continue
+        bit, role_id = role.get("bit"), role.get("id")
+        if isinstance(bit, bool) or not isinstance(bit, int) or not 0 <= bit < 64 or not isinstance(role_id, str):
+            continue
+        if role_id == "soft":
+            soft = 1 << bit
+        elif not role_id.startswith("sync."):
+            contract |= 1 << bit
+    return contract, soft
+
+
+def _owned_members(entries: Sequence[Mapping]) -> dict[str, list[str]]:
+    """Members each signal's budget row pays for: its own, and a shared clock only on its first signal."""
+    owner: dict[str, str] = {}
+    owned: dict[str, list[str]] = {}
+    for entry in entries:
+        name = str(entry.get("name"))
+        mine = owned.setdefault(name, [])
+        for array in entry.get("arrays", []) or []:
+            member = array.get("member") if isinstance(array, dict) else None
+            if isinstance(member, str) and owner.setdefault(member, name) == name and member not in mine:
+                mine.append(member)
+    return owned
+
+
+def _budget_rows(budget: Mapping, names: Sequence[str], problems: list[str]) -> dict[str, dict]:
+    raw = budget.get("signals")
+    if not isinstance(raw, list):
+        problems.append("budget.signals is not a list")
+        return {}
+    rows: dict[str, dict] = {}
+    for row in raw:
+        if not isinstance(row, dict) or not isinstance(row.get("name"), str):
+            problems.append("a budget.signals row has no string 'name'")
+        elif row["name"] in rows:
+            problems.append(f"budget.signals lists {row['name']!r} twice")
+        else:
+            rows[row["name"]] = row
+    if list(rows) != list(names):
+        missing = [name for name in names if name not in rows]
+        extra = [name for name in rows if name not in names]
+        detail = f"missing {missing}" if missing else f"extra {extra}" if extra else "in a different order"
+        problems.append(f"budget.signals does not list index.json's signals: {detail}")
+    return rows
+
+
+def _row_problems(entry: Mapping, row: Mapping, counts: Mapping[str, int], owned: Sequence[str],
+                  sizes: Mapping[str, int], view: SignalView | None) -> list[str]:
+    name = str(entry.get("name"))
+    problems: list[str] = []
+    if counts["retained"] != entry.get("n"):
+        problems.append(f"signal {name!r}: budget retained is {counts['retained']}, index.json n is {entry.get('n')}")
+    if counts["hard"] + counts["soft"] != counts["retained"]:
+        problems.append(
+            f"signal {name!r}: hard {counts['hard']} + soft {counts['soft']} is not retained {counts['retained']}"
+        )
+    paid = sum(sizes.get(member, 0) for member in owned)
+    if paid != counts["bytes"]:
+        problems.append(f"signal {name!r}: budget bytes are {counts['bytes']}, but its members {owned} take {paid}")
+    if _error_value(row.get("soft_max_abs_err")) is None:
+        problems.append(
+            f"signal {name!r}: soft_max_abs_err {row.get('soft_max_abs_err')!r} is not a "
+            f"{ERROR_WIDTH}-character %.6e string"
+        )
+    if view is not None:
+        contract, soft = _role_masks(entry)
+        roles = view.roles.astype(np.uint64)
+        required = int(np.count_nonzero(np.bitwise_and(roles, np.uint64(contract))))
+        if required > counts["hard"]:
+            problems.append(f"signal {name!r}: {required} samples carry a contract role, but hard is {counts['hard']}")
+        only_soft = int(np.count_nonzero(roles == np.uint64(soft))) if soft else 0
+        if only_soft > counts["soft"]:
+            problems.append(f"signal {name!r}: {only_soft} samples carry only the soft role, but soft is {counts['soft']}")
+    return problems
+
+
+def _accounting_check(artifact: Artifact, entries: Sequence[Mapping], views: Mapping[str, SignalView]) -> Check:
+    budget = artifact.manifest.get("budget")
+    if not isinstance(budget, dict):
+        return Check("budget.accounting", FAIL, BASIS_ARTIFACT, message="manifest.json has no 'budget' section")
+    problems: list[str] = []
+    fields: dict[str, int] = {}
+    for key in BUDGET_BYTES:
+        value = _count(budget.get(key))
+        if value is None:
+            problems.append(f"budget.{key} is {budget.get(key)!r}, expected a non-negative integer")
+        else:
+            fields[key] = value
+
+    sizes = {entry.name: int(entry.compressed_size) for entry in artifact.entries}
+    data_bytes = sum(size for name, size in sizes.items() if name.startswith(DATA_PREFIXES))
+    total = sum(fields.values())
+    if len(fields) == len(BUDGET_BYTES):
+        if total != artifact.size:
+            problems.append(f"required + discretionary + overhead bytes are {total}, the file is {artifact.size}")
+        signal_bytes = fields["required_bytes"] + fields["discretionary_bytes"]
+        if signal_bytes != data_bytes:
+            problems.append(f"required + discretionary bytes are {signal_bytes}, the data members take {data_bytes}")
+
+    section = artifact.manifest.get("artifact")
+    max_bytes = section.get("max_bytes") if isinstance(section, dict) else None
+    source = budget.get("source")
+    if source not in BUDGET_SOURCES:
+        problems.append(f"budget.source is {source!r}, expected one of {list(BUDGET_SOURCES)}")
+    elif (source == "none") != (max_bytes is None):
+        problems.append(f"budget.source is {source!r} but artifact.max_bytes is {max_bytes!r}")
+
+    names = [str(entry.get("name")) for entry in entries]
+    rows = _budget_rows(budget, names, problems)
+    owned = _owned_members(entries)
+    soft_total = 0
+    for entry in entries:
+        name = str(entry.get("name"))
+        row = rows.get(name)
+        if row is None:
+            continue
+        counts = {key: _count(row.get(key)) for key in BUDGET_COUNTS}
+        bad = [key for key, value in counts.items() if value is None]
+        if bad:
+            problems.append(f"signal {name!r}: budget {', '.join(bad)} must be non-negative integers")
+            continue
+        soft_total += counts["soft"]
+        problems.extend(_row_problems(entry, row, counts, owned.get(name, []), sizes, views.get(name)))
+    if soft_total == 0 and fields.get("discretionary_bytes"):
+        problems.append(f"no signal has soft samples, but discretionary_bytes is {fields['discretionary_bytes']}")
+
+    return verdict(
+        "budget.accounting",
+        problems,
+        claimed=str(total),
+        measured=str(artifact.size),
+        allowed="0",
+        message=f"{len(rows)} signals, {soft_total} soft samples, {fields.get('discretionary_bytes', 0)} "
+        "discretionary bytes",
+    )
+
+
+def _reconstruction_error(view: SignalView, signal: SourceSignal) -> float:
+    """docs/contracts.md reconstruction error of one signal: max |source - reconstruction| off the retained samples."""
+    kept = view.v.astype(np.float64)
+    source = np.asarray(signal.v).astype(np.float64)
+    if view.entry.get("interp") == "hold":
+        rebuilt = reference.reconstruct_hold(view.t, kept, signal.t)
+    else:
+        rebuilt = reference.reconstruct_linear(view.t, kept, signal.t)
+    with np.errstate(invalid="ignore", over="ignore"):
+        diff = np.abs(source - rebuilt)
+    diff[view.idx] = 0.0
+    diff = diff[np.isfinite(diff)]
+    return float(diff.max()) if diff.size else 0.0
+
+
+def _errors_check(
+    artifact: Artifact, views: Mapping[str, SignalView], signals: Mapping[str, SourceSignal]
+) -> Check:
+    budget = artifact.manifest.get("budget")
+    raw = budget.get("signals") if isinstance(budget, dict) else None
+    claims = {row.get("name"): row.get("soft_max_abs_err") for row in raw or [] if isinstance(row, dict)}
+    problems: list[str] = []
+    compared = 0
+    for name, view in views.items():
+        signal = signals.get(name)
+        claimed = _error_value(claims.get(name))
+        if signal is None or claimed is None or signal.t.shape[0] != view.n_source:
+            continue  # budget.accounting and source.samples report these
+        compared += 1
+        measured = _reconstruction_error(view, signal)
+        scale = float(np.max(np.abs(view.v[np.isfinite(view.v)]))) if view.n and np.isfinite(view.v).any() else 0.0
+        if np.isinf(claimed):
+            agrees = measured >= 1e100
+        else:
+            agrees = abs(claimed - measured) <= 1e-6 * max(claimed, measured) + 16 * reference.ulp(scale)
+        if not agrees:
+            problems.append(
+                f"signal {name!r}: soft_max_abs_err is {claims[name].strip()}, the source gives {measured:.6e}"
+            )
+    return verdict(
+        "budget.errors",
+        problems,
+        basis=BASIS_SOURCE,
+        claimed=str(compared),
+        measured=str(compared - len(problems)),
+        allowed="1e-6 rel",
+        message=f"reconstruction errors of {compared} signals match the source",
+    )
+
+
 def _requirement_checks(
     view: SignalView | None,
     claim: Mapping,
@@ -1910,4 +2132,8 @@ def verify_artifact(
                 checks.extend(_event_checks(item, claimed[name], by_name, views, source_signals))
             else:
                 checks.extend(_sync_checks(item, claimed[name], by_name, views))
+
+    checks.append(_accounting_check(parsed, entries, views))
+    if source_signals:
+        checks.append(_errors_check(parsed, views, source_signals))
     return result

@@ -85,8 +85,14 @@ def rocket_summary():
     outcome = compile(module.simulate(), ROOT / "tests/golden/m5_extrema_crossings.yaml")
     artifact = baslt.read_artifact(outcome.bytes)
     assert verify(outcome.bytes).status == "pass"
+    rows = outcome.manifest["budget"]["signals"]
+    assert [row["name"] for row in rows] == [entry["name"] for entry in artifact.index["signals"]]
+    assert all(row["retained"] == entry["n"] == row["hard"] + row["soft"]
+               for row, entry in zip(rows, artifact.index["signals"]))
+    assert outcome.size <= outcome.manifest["artifact"]["max_bytes"]
+    # Preview samples depend on the zlib build; the samples the contracts require do not.
     return {"status": outcome.status, "requirements": outcome.manifest["requirements"],
-            "retained": [{"name": entry["name"], "n": entry["n"]} for entry in artifact.index["signals"]]}
+            "hard": [{"name": row["name"], "n": row["hard"]} for row in rows]}
 
 
 def test_rocket_golden():

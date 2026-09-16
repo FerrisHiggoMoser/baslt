@@ -1,20 +1,23 @@
 """Compile one run into `.baslt` container bytes.
 
-    evaluate -> materialize per signal -> encode arrays -> index.json and policy.json
-             -> manifest (size fixed point) -> write_zip -> self-verify
+    evaluate hard -> [add soft samples -> close sync -> encode -> index.json, policy.json -> manifest (size fixed
+    point)] repeated by the budget search -> reconstruction errors -> write_zip -> self-verify
 
 Every signal gets one `s/<k>` member holding its `v`, `idx` and `roles` arrays back to back, and points
 its `t` descriptor at a `t/<j>` member. Signals whose retained timestamps are bit-identical share that
 member, which is what makes a clock stored once for a whole run.
 
-This milestone compiles the hard layer only: every retained sample is required by a hard contract, an event, a
-sync group or the implicit `extent`/`gap` retention, so `budget.discretionary_bytes` is 0 and the artifact is the
-smallest one the policy allows. A budget it does not fit is therefore infeasible outright, reported with
-an itemized breakdown instead of a search for a smaller artifact.
+Hard requirements, events, sync groups and the implicit `extent`/`gap` retention form the base artifact. When it
+does not fit the budget the compile is infeasible and reports an itemized breakdown. Otherwise the rest of the
+budget goes to preview samples ranked by `reduce.rank.preview_order`: every signal with soft weight `w` takes the
+first `min(cap, floor(s * w))` of its ranking for one common scale `s`, and the search keeps the largest scale
+whose complete artifact (sync propagation included) was measured to fit. Compressed members are cached by content,
+so a trial only compresses the members that changed.
 """
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
@@ -41,9 +44,10 @@ from ..container.spec import (
 )
 from ..container.zipwriter import Member, compress_member, write_zip, zip_size
 from ..errors import CompileError, InfeasibleBudget, SelfVerifyFailed
-from ..manifest import EventEntry, RequirementEntry, SignalBudget, SyncEntry, build_manifest
+from ..manifest import NO_DIGEST, EventEntry, RequirementEntry, SignalBudget, SyncEntry, build_manifest
 from ..policy.schema import OP_SCHEMAS
-from .required import RequiredResult, SignalPlan, evaluate_run
+from ..reduce.rank import preview_order
+from .required import RequiredResult, SignalPlan, close, evaluate_hard
 
 if TYPE_CHECKING:
     from ..hashing import HashInfo
@@ -53,6 +57,12 @@ if TYPE_CHECKING:
 # Supported self-verification entry points, tried in order.
 CHECK_ENTRY_POINTS: tuple[str, ...] = ("verify_artifact", "check_artifact", "run_checks", "verify")
 FAILED_STATUSES = frozenset({"fail", "failed", "error"})
+
+# Preview samples per signal without a budget, by soft weight (high 4, medium 2, low 1).
+DEFAULT_POINTS: dict[int, int] = {4: 16384, 2: 4096, 1: 1024}
+# A budget of B bytes never needs more than this many preview candidates per signal.
+CAP_SAMPLES_PER_BYTE = 16
+MAX_EVALUATIONS = 16
 
 
 @dataclass(slots=True)
@@ -265,6 +275,7 @@ def _infeasible(
     budget_source: str,
     method: int,
     level: int,
+    digest: HashInfo | None = None,
 ) -> InfeasibleBudget:
     by_name = {item.plan.name: item for item in encoded}
     requirements = []
@@ -302,12 +313,13 @@ def _infeasible(
         "overhead_bytes": int(size - sum(int(row.bytes) for row in rows)),
         "requirements": requirements,
         "signals": [row.to_json() for row in rows],
+        "digest": NO_DIGEST if digest is None else digest.to_json(),
     }
     source = "artifact.max_size" if budget_source == "policy" else "--max-size"
     return InfeasibleBudget(
         f"the hard requirements need {size} bytes but {source} allows {max_bytes}; "
-        f"{size - max_bytes} bytes too many. Every retained sample is required by a hard contract, "
-        "so no smaller artifact satisfies this policy",
+        f"{size - max_bytes} bytes too many. Every retained sample is required by a hard contract, an event or a "
+        "sync group, so no smaller artifact satisfies this policy; baslt explain suggests what to relax",
         report,
     )
 
@@ -369,108 +381,329 @@ def run_self_verify(blob: bytes) -> list[str]:
     return []
 
 
+@dataclass(slots=True)
+class _Assembly:
+    """One candidate artifact: everything needed to write it, plus its exact size."""
+
+    required: RequiredResult
+    encoded: list[_Encoded]
+    rows: list[SignalBudget]
+    members: list[Member]
+    manifest: dict
+    size: int
+    data_bytes: int
+
+
+class _Assembler:
+    """Builds candidate artifacts for one run, caching compressed members across budget trials."""
+
+    def __init__(self, run: Run, bound: BoundPolicy, digest: HashInfo | None) -> None:
+        self.run = run
+        self.bound = bound
+        self.digest = digest
+        self.codec = bound.policy.artifact.codec
+        self.method = CODEC_METHODS[self.codec]
+        self.level = DEFAULT_LEVEL
+        self._sizes: dict[tuple[str, bytes], int] = {}
+        # Set from the artifact without soft samples; later trials are accounted against it.
+        self.base_data_bytes: int | None = None
+        self.base_counts: dict[str, int] | None = None
+
+    def _csize(self, member: Member) -> int:
+        key = (member.name, hashlib.sha1(member.data).digest() + len(member.data).to_bytes(8, "little"))
+        size = self._sizes.get(key)
+        if size is None:
+            size = len(compress_member(member, level=self.level)[1])
+            self._sizes[key] = size
+        return size
+
+    def build(self, required: RequiredResult, *, errors: dict[str, float] | None = None) -> _Assembly:
+        bound = self.bound
+        encoded = [_encode_signal(required.signals[name]) for name in bound.included]
+        index, signal_members, time_members, owned = _index_and_members(encoded, bound, self.method)
+        data_members = signal_members + time_members
+        csize = {member.name: self._csize(member) for member in data_members}
+
+        header_bytes = header_json(self.codec, self.level)
+        index_member = Member(MEMBER_INDEX, canonical_json(index), self.method)
+        policy_member = Member(MEMBER_POLICY, canonical_json(_policy_json(bound)), self.method)
+        fixed = [
+            (MEMBER_HEADER, len(header_bytes)),
+            (MEMBER_INDEX, self._csize(index_member)),
+            (MEMBER_POLICY, self._csize(policy_member)),
+            *csize.items(),
+        ]
+
+        rows: list[SignalBudget] = []
+        for item in encoded:
+            name = item.plan.name
+            hard = item.n if self.base_counts is None else self.base_counts[name]
+            rows.append(SignalBudget(
+                name=name,
+                retained=item.n,
+                hard=hard,
+                soft=item.n - hard,
+                bytes=sum(csize[member] for member in owned[name]),
+                soft_max_abs_err=(errors or {}).get(name, 0.0),
+            ))
+        data_bytes = sum(row.bytes for row in rows)
+        base_bytes = data_bytes if self.base_data_bytes is None else self.base_data_bytes
+        discretionary = max(0, data_bytes - base_bytes)
+
+        requirements = [
+            RequirementEntry(id=r.id, signal=r.signal, op=r.op, severity=r.severity, status=r.status,
+                             evidence=r.evidence)
+            for r in required.requirements
+        ]
+        events = [
+            EventEntry(name=r.name, signal=r.signal, severity=r.severity, status=r.status, evidence=r.evidence)
+            for r in required.events
+        ]
+        sync_groups = [SyncEntry(name=r.name, status=r.status, evidence=r.evidence) for r in required.sync_groups]
+        manifest, size = build_manifest(
+            source=self.run.meta,
+            digest=self.digest,
+            policy=bound.policy,
+            requirements=requirements,
+            signals=rows,
+            samples_total=sum(int(sig.n) for sig in self.run.signals.values()),
+            source_signals=len(self.run.signals),
+            size_of=lambda length: zip_size([*fixed, (MEMBER_MANIFEST, length)]),
+            max_bytes=bound.max_bytes,
+            budget_source=bound.budget_source,
+            codec=self.codec,
+            level=self.level,
+            events=events,
+            sync_groups=sync_groups,
+            discretionary_bytes=discretionary,
+        )
+        members = [
+            Member(MEMBER_HEADER, header_bytes, self.method),
+            index_member,
+            Member(MEMBER_MANIFEST, canonical_json(manifest), self.method),
+            policy_member,
+            *data_members,
+        ]
+        return _Assembly(required=required, encoded=encoded, rows=rows, members=members, manifest=manifest,
+                         size=size, data_bytes=data_bytes)
+
+
+# --------------------------------------------------------------------------------------------------------------
+# Soft layer and budget search
+
+
+def _soft_plan(run: Run, bound: BoundPolicy) -> tuple[dict[str, np.ndarray], dict[str, int], dict[str, int]]:
+    """Preview rankings, point caps and weights of every signal that can take soft samples."""
+    rankings: dict[str, np.ndarray] = {}
+    caps: dict[str, int] = {}
+    weights: dict[str, int] = {}
+    for name in bound.included:
+        weight, max_points = bound.soft.get(name, (0, None))
+        sig = run.signals[name]
+        if weight <= 0 or sig.n == 0:
+            continue
+        if bound.max_bytes is None:
+            cap = DEFAULT_POINTS.get(weight, DEFAULT_POINTS[2])
+        else:
+            cap = CAP_SAMPLES_PER_BYTE * bound.max_bytes
+        if max_points is not None:
+            cap = min(cap, int(max_points))
+        cap = min(cap, sig.n)
+        if cap <= 0:
+            continue
+        rankings[name] = preview_order(sig.v, cap)
+        caps[name] = int(rankings[name].shape[0])
+        weights[name] = int(weight)
+    return rankings, caps, weights
+
+
+def _points(scale: float, caps: dict[str, int], weights: dict[str, int]) -> dict[str, int]:
+    return {name: min(cap, int(np.floor(scale * weights[name]))) for name, cap in caps.items()}
+
+
+def _reconstruction_errors(encoded: list[_Encoded]) -> dict[str, float]:
+    """Largest absolute difference between each source signal and its reconstruction from the retained samples.
+
+    The reconstruction is the one of docs/contracts.md, a function of time: the retained value at a retained
+    timestamp (the later one when timestamps repeat), linear interpolation `a + w * (b - a)` between consecutive
+    retained timestamps, NaN across a non-finite retained value; discrete signals hold the previous retained value.
+    Retained samples count as exact and non-finite differences are ignored.
+    """
+    errors: dict[str, float] = {}
+    for item in encoded:
+        sig = item.plan.signal
+        idx = item.idx
+        if sig.n == 0 or idx.shape[0] == 0:
+            errors[item.plan.name] = 0.0
+            continue
+        t_kept = sig.t[idx]
+        left = np.searchsorted(t_kept, sig.t, side="right") - 1
+        left = np.maximum(left, 0)
+        right = np.minimum(left + 1, idx.shape[0] - 1)
+        knot = t_kept[left] == sig.t
+        hold = sig.kind == "discrete"
+        if not hold:
+            with np.errstate(divide="ignore", invalid="ignore"):
+                weight = (sig.t - t_kept[left]) / (t_kept[right] - t_kept[left])
+            weight[knot] = 0.0
+        values = sig.v.reshape(sig.n, -1)
+        worst = 0.0
+        for k in range(values.shape[1]):
+            column = values[:, k].astype(np.float64)
+            kept = column[idx]
+            a = kept[left]
+            with np.errstate(invalid="ignore", over="ignore"):
+                approx = a if hold else np.where(knot, a, a + weight * (kept[right] - a))
+                diff = np.abs(column - approx)
+            diff[idx] = 0.0
+            diff = diff[np.isfinite(diff)]
+            if diff.size:
+                worst = max(worst, float(diff.max()))
+        errors[item.plan.name] = worst
+    return errors
+
+
+def _search(
+    trial, base: _Assembly, caps: dict[str, int], weights: dict[str, int], max_bytes: int
+) -> tuple[_Assembly, int]:
+    """The largest measured preview scale whose artifact fits `max_bytes`, and the number of trials built.
+
+    Trial sizes are monotone in the scale. Each step interpolates the next scale from the two measured bracket
+    sizes, treating bytes as linear in the number of preview samples, and falls back to bisection when one side
+    has moved twice in a row. The search stops once the accepted artifact uses 99.5% of the budget, the bracket
+    is narrower than one preview sample of the highest-weight signal, or MAX_EVALUATIONS trials were built.
+    """
+    cap_arr = np.array([caps[name] for name in caps], dtype=np.int64)
+    weight_arr = np.array([weights[name] for name in caps], dtype=np.float64)
+
+    def total(scale: float) -> int:
+        return int(np.minimum(cap_arr, np.floor(scale * weight_arr)).sum())
+
+    top_scale = float(np.max(cap_arr / weight_arr))
+    top = trial(_points(top_scale, caps, weights))
+    evaluations = 1
+    if top.size <= max_bytes:
+        return top, evaluations
+
+    def scale_for(picks: float, lo: float, hi: float) -> float:
+        for _ in range(64):
+            mid = (lo + hi) / 2.0
+            if total(mid) >= picks:
+                hi = mid
+            else:
+                lo = mid
+        return hi
+
+    step = 1.0 / float(weight_arr.max())
+    lo_s, lo_r, hi_s, hi_r = 0.0, base, top_scale, top
+    lo_points, hi_points = _points(lo_s, caps, weights), _points(hi_s, caps, weights)
+    streak = 0  # positive: low moved last, negative: high moved last
+    for _ in range(4 * MAX_EVALUATIONS):
+        if evaluations >= MAX_EVALUATIONS or hi_s - lo_s <= max(step, 0.005 * hi_s):
+            break
+        if lo_r.size >= 0.995 * max_bytes:
+            break
+        if abs(streak) >= 2:
+            scale = (lo_s + hi_s) / 2.0
+        else:
+            lo_p, hi_p = total(lo_s), total(hi_s)
+            fraction = (max_bytes - lo_r.size) / max(hi_r.size - lo_r.size, 1)
+            fraction = min(max(fraction, 0.02), 0.98)
+            scale = scale_for(lo_p + fraction * (hi_p - lo_p), lo_s, hi_s)
+        if not lo_s < scale < hi_s:
+            scale = (lo_s + hi_s) / 2.0
+        points = _points(scale, caps, weights)
+        if points == lo_points:
+            lo_s = scale
+            continue
+        if points == hi_points:
+            hi_s = scale
+            continue
+        result = trial(points)
+        evaluations += 1
+        if result.size <= max_bytes:
+            lo_s, lo_r, lo_points = scale, result, points
+            streak = streak + 1 if streak > 0 else 1
+        else:
+            hi_s, hi_r, hi_points = scale, result, points
+            streak = streak - 1 if streak < 0 else -1
+    return lo_r, evaluations
+
+
+def minimum_size(run: Run, bound: BoundPolicy, *, digest: HashInfo | None = None) -> int:
+    """Size in bytes of the artifact `bound` allows with no preview samples; nothing is written or verified.
+
+    This is the smallest artifact except when preview samples let very short signals share a clock member.
+    """
+    hard = evaluate_hard(run, bound)
+    return _Assembler(run, bound, digest).build(close(hard, bound)).size
+
+
 def compile_run(
     run: Run, bound: BoundPolicy, *, digest: HashInfo | None, self_verify: bool = True
 ) -> CompileOutcome:
     """Compile `run` under `bound` into container bytes.
 
+    Hard requirements, events and sync groups are always kept. The rest of `bound.max_bytes` is spent on preview
+    samples: every trial size is measured on the complete artifact, soft samples and sync propagation included, and
+    only a measured size within the budget is accepted, so the result never exceeds it. Without a budget, every
+    signal gets a default number of preview samples by priority.
+
     `digest` is the source digest recorded in the manifest (None writes the "none" digest). Pass
     `self_verify=False` to skip the independent verification of the compiled bytes.
 
-    Raises InfeasibleBudget when the hard requirements do not fit `bound.max_bytes`, SelfVerifyFailed
-    when the artifact fails its own verification, and UsageError or PolicyError for a policy this
-    milestone cannot compile.
+    Raises InfeasibleBudget when the hard requirements alone do not fit `bound.max_bytes`, SelfVerifyFailed when
+    the artifact fails its own verification, and UsageError or PolicyError for a policy this build cannot compile.
     """
-    policy = bound.policy
-    codec = policy.artifact.codec
-    method = CODEC_METHODS[codec]
-    level = DEFAULT_LEVEL
+    assembler = _Assembler(run, bound, digest)
+    hard = evaluate_hard(run, bound)
+    rankings, caps, weights = _soft_plan(run, bound)
 
-    required = evaluate_run(run, bound)
-    encoded = [_encode_signal(required.signals[name]) for name in bound.included]
+    kept: dict[str, np.ndarray] = {}
 
-    index, signal_members, time_members, owned = _index_and_members(encoded, bound, method)
-    data_members = signal_members + time_members
-    csize = {member.name: len(compress_member(member, level=level)[1]) for member in data_members}
+    def trial(points: dict[str, int]) -> _Assembly:
+        # Samples the base artifact keeps anyway are not previews: they keep their roles, and their bytes.
+        soft = {}
+        for name, count in points.items():
+            picks = rankings[name][:count]
+            soft[name] = picks[~np.isin(picks, kept[name], assume_unique=True)] if count > 0 else picks[:0]
+        return assembler.build(close(hard, bound, soft))
 
-    header_bytes = header_json(codec, level)
-    index_bytes = canonical_json(index)
-    policy_bytes = canonical_json(_policy_json(bound))
-    index_member = Member(MEMBER_INDEX, index_bytes, method)
-    policy_member = Member(MEMBER_POLICY, policy_bytes, method)
-    fixed = [
-        (MEMBER_HEADER, len(header_bytes)),
-        (MEMBER_INDEX, len(compress_member(index_member, level=level)[1])),
-        (MEMBER_POLICY, len(compress_member(policy_member, level=level)[1])),
-        *csize.items(),
-    ]
+    base = trial({})
+    kept.update((item.plan.name, item.idx) for item in base.encoded)
+    assembler.base_data_bytes = base.data_bytes
+    assembler.base_counts = {row.name: row.retained for row in base.rows}
+    max_bytes = bound.max_bytes
 
-    rows = [
-        SignalBudget(
-            name=item.plan.name,
-            retained=item.n,
-            hard=item.n,  # no soft layer yet: every retained sample is required
-            soft=0,
-            bytes=sum(csize[name] for name in owned[item.plan.name]),
-        )
-        for item in encoded
-    ]
-    requirements = [
-        RequirementEntry(
-            id=result.id,
-            signal=result.signal,
-            op=result.op,
-            severity=result.severity,
-            status=result.status,
-            evidence=result.evidence,
-        )
-        for result in required.requirements
-    ]
-    events = [
-        EventEntry(name=result.name, signal=result.signal, severity=result.severity, status=result.status,
-                   evidence=result.evidence)
-        for result in required.events
-    ]
-    sync_groups = [
-        SyncEntry(name=result.name, status=result.status, evidence=result.evidence)
-        for result in required.sync_groups
-    ]
+    if not caps:
+        chosen = base
+    elif max_bytes is None:
+        chosen = trial(dict(caps))
+    elif base.size <= max_bytes:
+        chosen, _ = _search(trial, base, caps, weights, max_bytes)
+    else:
+        # More samples can make an artifact smaller when they give signals identical timestamps, which then share
+        # one clock member; that only matters for very short signals, so one full-preview trial settles it.
+        chosen = trial(dict(caps))
+    if max_bytes is not None and chosen.size > max_bytes:
+        raise _infeasible(base.required, base.encoded, base.rows, base.size, max_bytes, bound.budget_source,
+                          assembler.method, assembler.level, digest)
 
-    manifest, size = build_manifest(
-        source=run.meta,
-        digest=digest,
-        policy=policy,
-        requirements=requirements,
-        signals=rows,
-        samples_total=sum(int(sig.n) for sig in run.signals.values()),
-        source_signals=len(run.signals),
-        size_of=lambda length: zip_size([*fixed, (MEMBER_MANIFEST, length)]),
-        max_bytes=bound.max_bytes,
-        budget_source=bound.budget_source,
-        codec=codec,
-        level=level,
-        events=events,
-        sync_groups=sync_groups,
-    )
-
-    if bound.max_bytes is not None and size > bound.max_bytes:
-        raise _infeasible(required, encoded, rows, size, bound.max_bytes, bound.budget_source, method, level)
-
-    members = [
-        Member(MEMBER_HEADER, header_bytes, method),
-        index_member,
-        Member(MEMBER_MANIFEST, canonical_json(manifest), method),
-        policy_member,
-        *data_members,
-    ]
-    blob = write_zip(members, level=level)
-    if len(blob) != size:
+    # The errors are formatted at a fixed width, so recording them leaves the size unchanged.
+    final = assembler.build(chosen.required, errors=_reconstruction_errors(chosen.encoded))
+    if final.size != chosen.size:
         raise CompileError(
-            f"the artifact is {len(blob)} bytes but its manifest records {size}; "
+            f"the artifact size changed from {chosen.size} to {final.size} bytes when the reconstruction errors "
+            "were recorded; this is an internal compiler error"
+        )
+    blob = write_zip(final.members, level=assembler.level)
+    if len(blob) != final.size:
+        raise CompileError(
+            f"the artifact is {len(blob)} bytes but its manifest records {final.size}; "
             "this is an internal compiler error"
         )
 
-    notes = list(required.notes)
+    notes = list(final.required.notes)
     if self_verify:
         notes.extend(run_self_verify(blob))
-    return CompileOutcome(bytes=blob, manifest=manifest, evidence=required, notes=notes)
+    return CompileOutcome(bytes=blob, manifest=final.manifest, evidence=final.required, notes=notes)

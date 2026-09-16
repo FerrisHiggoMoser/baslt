@@ -14,7 +14,7 @@ artifact:
   max_size: 2 MiB            # hard ceiling; hard requirements are never dropped to meet it
   codec: deflate             # deflate | store | zstd
   hash: full                 # full | sampled | none   (default: full for files, arrays for in-memory)
-  soft_value_dtype: source   # source | float32 (float32 only applies to signals with no hard contract)
+  soft_value_dtype: source   # source; float32 (preview values as <f4) is reserved and rejected by this build
   on_not_applicable: warn    # warn | fail   (a hard requirement on an empty / all-NaN / constant signal)
 
 signals:
@@ -164,6 +164,11 @@ trajectory knot time.
 `match` is a glob over canonical names and aliases. `priority` is `high` (weight 4), `medium` (2), `low` (1) or
 `none` (0, keep only hard samples). `max_points` caps soft points for matching signals. Signals no rule matches get
 `medium`.
+
+With a budget, one scale is shared by all signals and each takes preview points in proportion to its weight until the
+artifact is as large as the budget allows. Without a budget, each signal takes `max_points`, or 16384, 4096 and 1024
+points for high, medium and low. Preview samples on a sync group member are kept on the other members too. The ranking
+and the search are defined in `contracts.md`.
 
 ## Units
 

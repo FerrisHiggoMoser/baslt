@@ -63,11 +63,13 @@ def test_legend_order_extent_gap_then_requirements_in_policy_order():
         (5, "hard.q.violation[0]#edge"),
         (6, "hard.q.violation[0]#worst"),
         (7, "hard.q.window_extrema"),
+        (8, "soft"),  # every signal with a preview weight gets the soft role last
     ]
     assert [(role.bit, role.id) for role in required.plan("mode").legend] == [
         (0, "extent"),
         (1, "gap"),
         (2, "hard.mode.state_transitions"),
+        (3, "soft"),
     ]
 
 
@@ -88,13 +90,13 @@ def test_signal_without_hard_requirements_has_no_gap_bit():
     run = make_run(q=wave(), other=wave())
     required = plan_of(run, hard={"q": {"global_extrema": {}}})
 
-    assert [role.id for role in required.plan("other").legend] == ["extent"]
+    assert [role.id for role in required.plan("other").legend] == ["extent", "soft"]
     assert [role.id for role in required.plan("q").legend][:2] == ["extent", "gap"]
 
 
 def test_more_than_64_roles_is_a_policy_error():
     run = make_run(q=wave())
-    specs = [{"value": float(i)} for i in range(MAX_ROLES - 1)]  # extent + gap + 63 = 65 bits
+    specs = [{"value": float(i)} for i in range(MAX_ROLES - 2)]  # extent + gap + 62 + soft = 65 bits
     with pytest.raises(PolicyError) as exc:
         plan_of(run, hard={"q": {"threshold_crossing": specs}})
 
@@ -106,7 +108,7 @@ def test_more_than_64_roles_is_a_policy_error():
 def test_legend_of_is_the_single_rule_for_the_legend():
     run = make_run(q=wave())
     bound = bind(run, hard={"q": {"global_extrema": {}, "violation": [{"above": 58.0}]}})
-    legend = legend_of(bound.reqs_by_signal["q"])
+    legend = legend_of(bound.reqs_by_signal["q"], ["soft"])
 
     assert [role.id for role in legend] == [role.id for role in evaluate_run(run, bound).plan("q").legend]
     assert [role.id for role in legend_of([])] == ["extent"]
@@ -265,18 +267,19 @@ def test_unsupported_sections_are_named():
 
     message = str(exc.value)
     assert "trajectories.ascent: trajectories" in message
-    assert "soft[0] (match 'q'): the soft layer" in message
+    assert "soft[0]" not in message
     assert "events.MECO" not in message and "sync_groups.dyn" not in message
 
 
 @pytest.mark.parametrize(
     ("section", "needle"),
     [
-        ({"soft": [{"match": "*", "priority": "none"}]}, "the soft layer"),
+        ({"trajectories": {"ascent": {"position": "pos", "max_position_error": 1.0}}}, "trajectories"),
+        ({"artifact": {"soft_value_dtype": "float32"}}, "artifact.soft_value_dtype: float32 preview values"),
     ],
 )
 def test_each_unsupported_section_alone_is_rejected(section, needle):
-    run = make_run(q=wave(), thrust=wave())
+    run = make_run(q=wave(), thrust=wave(), pos=np.zeros((40, 3)))
     with pytest.raises(UsageError, match=needle):
         plan_of(run, **section)
 

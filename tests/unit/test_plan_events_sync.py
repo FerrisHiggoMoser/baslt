@@ -41,9 +41,10 @@ def test_legend_order_adds_event_and_sync_roles_after_hard_roles():
                   events={"E": {"when": {"signal": "thrust", "falls_below": 3}, "keep": {"signals": ["q", "thrust"]}}},
                   sync_groups={"g": {"members": ["q", "thrust"]}})
     assert [r.id for r in result.signals["q"].legend] == [
-        "extent", "gap", "hard.q.global_extrema", "event.E#window", "sync.g"]
+        "extent", "gap", "hard.q.global_extrema", "event.E#window", "soft", "sync.g"]
     assert [r.id for r in result.signals["thrust"].legend] == [
-        "extent", "event.E#trigger", "event.E#window", "sync.g"]
+        "extent", "event.E#trigger", "event.E#window", "soft", "sync.g"]
+    assert propagates("soft")
     assert propagates("event.E#window") and propagates("hard.q.global_extrema")
     assert not propagates("extent") and not propagates("gap") and not propagates("sync.g")
 

@@ -188,8 +188,8 @@ Roles: `trajectory.<name>#knot`, `link.<name>`.
 
 Propagating timestamps of a group: the distinct (bitwise) timestamps of every retained sample of every member that
 carries a propagating role, taken before any group runs. Every role propagates except `extent`, `gap`, `sync.*`
-and `link.*`: today that is hard requirement and event roles; trajectory knots and soft picks join them when those
-layers exist. Soft timestamps are chosen once per group from the union of member picks.
+and `link.*`: hard requirement, event and `soft` roles; trajectory knots will join them. A preview sample on one
+member therefore reaches every other member of its groups.
 
 For each propagating timestamp T and each member M (including the member T came from):
 
@@ -211,8 +211,47 @@ Role: `sync.<name>`.
 
 Crossings, violations and event triggers retain every candidate (every flip bracket and confirming sample, every
 candidate run's boundary pairs, every candidate trigger). Detecting them again on any superset of the retained
-samples therefore gives exactly the source's result. Samples added by events, sync groups and, later, the soft layer
-never create or hide one, so the compiler needs no repair step for them; a property test enforces this.
+samples therefore gives exactly the source's result. Samples added by events, sync groups and the soft layer never
+create or hide one, so the compiler needs no repair step for them; a property test enforces this.
+
+## Soft layer and budget
+
+The soft layer spends what the hard layer leaves of `artifact.max_size` on preview samples. It guarantees nothing
+about the run; it is described here because the manifest accounts for it and the verifier checks that accounting.
+
+**Base artifact.** The implicit retention, every hard requirement, every event and the sync groups, with no preview
+samples. If it does not fit the budget the compile is infeasible and nothing is written, with one exception: preview
+samples can make an artifact smaller when they give signals identical timestamps that then share one clock member, so
+the artifact with every preview sample is tried once before giving up.
+
+**Ranking.** Each signal with soft weight `w > 0` (`high` 4, `medium` 2, `low` 1) gets one fixed order of all its
+source indices: the global minimum and maximum of every component, the boundaries of non-finite runs, then level by
+level the minimum and maximum of each bin of an equal-count split into 2, 4, 8, … bins (bins with the widest value
+range first, lowest index on ties), then the remaining indices in bit-reversed order. A signal takes a prefix of that
+order, so more preview samples only ever add samples.
+
+**Allocation.** For one scale `s` shared by all signals, a signal takes the first `min(cap, floor(s·w))` indices,
+where `cap` is `max_points` when given and at most `16 × max_bytes`. Indices the base artifact already keeps are not
+previews and are skipped. The chosen samples carry the role `soft` and propagate through sync groups. Without a
+budget every signal takes `min(n, max_points or default)` indices, the default being 16384, 4096 and 1024 for high,
+medium and low. Priority `none` takes nothing and adds no `soft` role.
+
+**Search.** Every trial is a complete artifact, sync propagation and manifest included, and its size is measured, not
+estimated. The largest measured scale whose artifact fits is kept; the search stops after 16 trials, when the bracket
+is narrower than one sample of the heaviest signal or 0.5 % of the scale, or once the kept artifact uses 99.5 % of
+the budget. The result therefore never exceeds the budget.
+
+**Accounting.** Per signal, `hard` is the number of samples the base artifact keeps and `soft = retained − hard`.
+`bytes` is the compressed size of the signal's `s/` member plus, for the first signal on a clock, its `t/` member.
+`discretionary_bytes` is how much larger the data members are than in the base artifact (never negative),
+`required_bytes` is the rest of the data members and `overhead_bytes` everything else, so the three add up to the file
+size.
+
+**Reconstruction error.** `soft_max_abs_err` is `max |x[i] − x̂(t[i])|` over the source samples not retained and every
+component, where `x̂` is the reconstruction of the conventions above: the retained value at a retained timestamp (the
+later one when timestamps repeat), `x[a] + w·(x[b] − x[a])` with `w = (t − t[a]) / (t[b] − t[a])` between consecutive
+retained timestamps, and the previous retained value for discrete signals. Non-finite differences are ignored. It is
+written as a 12-character `%.6e` string so the manifest's length does not depend on it.
 
 ## Statuses
 

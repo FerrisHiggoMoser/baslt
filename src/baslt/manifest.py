@@ -141,8 +141,25 @@ class SignalBudget:
             "hard": int(self.hard),
             "soft": int(self.soft),
             "bytes": int(self.bytes),
-            "soft_max_abs_err": float(self.soft_max_abs_err),
+            "soft_max_abs_err": fixed_width_error(self.soft_max_abs_err),
         }
+
+
+def fixed_width_error(value: float) -> str:
+    """A non-negative error as a 12-character `%.6e` string, so the manifest length does not depend on it.
+
+    The budget search sizes the artifact before the preview error is known; a fixed width keeps that size exact.
+    """
+    import math
+
+    number = float(value)
+    if math.isnan(number):
+        return "nan".rjust(12)
+    if math.isinf(number) or number >= 1e100:
+        return "inf".rjust(12)
+    if number < 1e-99:
+        return "0.000000e+00"
+    return "%.6e" % number
 
 
 def _source_block(source: SourceMeta | None, digest: HashInfo | None, signals: int, samples_total: int) -> dict:
@@ -180,8 +197,8 @@ def build_manifest(
     `size_of(manifest_length)` returns the total file size when `manifest.json` holds that many bytes;
     the two are solved together. Returns `(manifest, size)`.
     """
-    required_bytes = sum(int(entry.bytes) for entry in signals)
     discretionary_bytes = int(discretionary_bytes)
+    required_bytes = sum(int(entry.bytes) for entry in signals) - discretionary_bytes
     source_size = getattr(source, "size_bytes", None)
 
     base = {

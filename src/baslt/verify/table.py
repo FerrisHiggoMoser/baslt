@@ -56,7 +56,7 @@ ASPECTS: frozenset[str] = frozenset(
         "container", "descriptors", "invariants", "size", "policy", "bind",
         "max", "min", "buckets", "prominence", "separation", "brackets", "fidelity", "runs",
         "transitions", "trigger", "windows", "sed", "alignment", "accounting", "unaligned",
-        "crossings", "digest", "samples", "source", "peaks",
+        "crossings", "digest", "samples", "source", "peaks", "errors",
     }
 )  # fmt: skip
 

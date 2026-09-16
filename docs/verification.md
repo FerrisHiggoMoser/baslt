@@ -26,6 +26,7 @@ own unit table and its own simple reference algorithms, and may not import the c
 | `events.<name>.<aspect>`, `sync_groups.<name>.alignment` | varies | Event and sync-group checks below. |
 | `source.digest` | source | The source digest matches (a sampled digest is reported as a fingerprint, never as sha256). |
 | `source.samples` | source | Every retained `(t, v)` is bit-identical to the source at its index. |
+| `budget.accounting`, `budget.errors` | artifact, source | The byte and sample accounting, and the reconstruction errors (below). |
 
 ## Per-contract checks
 
@@ -47,7 +48,8 @@ own unit table and its own simple reference algorithms, and may not import the c
 | event | `source` | source | Triggers and window bounds recomputed from the source match the claims. |
 | trajectory | `sed` | attested | Knots present, claimed `max_sed ≤ ε`, linked signals aligned or bracketed at every knot. |
 | sync_group | `alignment` | artifact | Every propagating timestamp inside a member's span is present bitwise (with the group's role) or bracketed by two retained samples with consecutive source indices (both with the role); `propagating`, `aligned`, `unaligned` and `out_of_range` match, and the status is `warn` exactly when something is unaligned. |
-| budget | `accounting` | artifact | Required + discretionary + overhead bytes equal the file size. |
+| budget | `accounting` | artifact | Required + discretionary + overhead bytes equal the file size, and required + discretionary equal the data members; `budget.source` agrees with `max_bytes`; one row per signal in index order with `retained = n = hard + soft`, `bytes` equal to the members the signal pays for, a well-formed `soft_max_abs_err`, at most `hard` samples carrying a contract role (anything but `soft` and `sync.*`), at most `soft` samples carrying only `soft`, and no discretionary bytes without soft samples. |
+| budget | `errors` | source | Each signal's `soft_max_abs_err` equals the reconstruction error recomputed from the source within `1e-6` relative plus `16·ulp(max|v|)`. |
 
 With `--source` the attested checks are recomputed: extrema with `nanmax`/`nanmin`, peaks with a naive prominence scan,
 crossings and violations with a readable state loop, SED at every source timestamp.
@@ -65,4 +67,4 @@ Floating-point slack is reported separately from the policy tolerance.
 
 The test suite decodes artifacts, mutates arrays or JSON, re-encodes them with valid CRCs and sizes, and asserts that
 verification fails with the expected check id. Edits to soft-only samples cannot be detected from the artifact alone;
-they are caught by `--source`.
+they are caught by `--source` (`source.samples`, and `budget.errors` when the edit changes the reconstruction).

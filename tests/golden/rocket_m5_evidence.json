@@ -271,7 +271,7 @@
       "status": "pass"
     }
   ],
-  "retained": [
+  "hard": [
     {
       "n": 3,
       "name": "prop/thrust"

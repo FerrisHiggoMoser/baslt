@@ -22,6 +22,7 @@ After the hard pass, events and sync groups add their own roles, still in policy
 
     event.<name>#trigger   on the event's trigger signal
     event.<name>#window    on every signal the event keeps a window of
+    soft                   on every signal the soft layer may add preview samples to
     sync.<name>            on every member of a sync group
 
 Events retain every candidate trigger (as threshold_crossing retains every candidate flip), so detecting the
@@ -33,13 +34,17 @@ carry only a sync role and do not propagate again (docs/contracts.md).
 Detection of crossings, violations and event triggers on any superset of these samples gives the same result as on
 the source, so nothing added later (sync, and later the soft layer) can create or hide one.
 
-A policy that asks for a feature this build does not implement -- trajectories or the soft layer -- is rejected
-with a UsageError naming the feature instead of being compiled into an artifact that would silently not carry it.
+The work is split in two so the budget search can repeat the cheap half: `evaluate_hard` runs the operators and
+events once, and `close` adds a given set of soft (preview) samples and propagates sync groups on top of that.
+`evaluate_run` does both with no soft samples.
+
+A policy that asks for a feature this build does not implement -- trajectories -- is rejected with a UsageError
+naming the feature instead of being compiled into an artifact that would silently not carry it.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -64,6 +69,7 @@ if TYPE_CHECKING:
 
 EXTENT_ROLE = "extent"
 GAP_ROLE = "gap"
+SOFT_ROLE = "soft"
 MAX_ROLES = 64  # a roles bitmask is at most <u8 (docs/container.md)
 
 MAIN = "main"
@@ -286,8 +292,8 @@ def _unsupported(bound: BoundPolicy) -> None:
     problems: list[str] = []
     for trajectory in bound.trajectories:
         problems.append(f"trajectories.{trajectory.name}: trajectories")
-    for i, rule in enumerate(bound.policy.soft):
-        problems.append(f"soft[{i}] (match {rule.match!r}): the soft layer")
+    if bound.policy.artifact.soft_value_dtype != "source":
+        problems.append(f"artifact.soft_value_dtype: {bound.policy.artifact.soft_value_dtype} preview values")
     for req in bound.reqs:
         if req.op not in OP_EVALUATORS:
             problems.append(f"{req.id}: the {req.op} operator")
@@ -298,7 +304,8 @@ def _unsupported(bound: BoundPolicy) -> None:
         + "\n".join(f"  {problem}" for problem in problems)
         + "\nit implements the hard operators "
         + ", ".join(SUPPORTED_OPS)
-        + " with events and sync groups but no trajectories or soft layer; remove the features above"
+        + " with events, sync groups and the soft layer, but no trajectories and no float32 preview values;"
+        + " remove the features above"
     )
 
 
@@ -337,12 +344,11 @@ def _evaluate_signal(name: str, sig: Signal, reqs: Sequence[BoundReq], extra: Se
     )
 
 
-def evaluate_run(run: Run, bound: BoundPolicy) -> RequiredResult:
-    """Evaluate every hard requirement of `bound` against `run`.
+def evaluate_hard(run: Run, bound: BoundPolicy) -> RequiredResult:
+    """Hard requirements and events, without soft samples or sync propagation.
 
-    Returns the retained samples, role legend, evidence and status of every included signal. Raises
-    UsageError for a policy feature this milestone does not implement or for a signal the run did not
-    load, and PolicyError for a legend wider than 64 bits or an operator that rejects its parameters.
+    Raises UsageError for a policy feature this build does not implement or for a signal the run did not load,
+    and PolicyError for a legend wider than 64 bits or an operator that rejects its parameters.
     """
     _unsupported(bound)
 
@@ -351,12 +357,15 @@ def evaluate_run(run: Run, bound: BoundPolicy) -> RequiredResult:
         extra[event.signal].append(event_role_id(event.name, TRIGGER))
         for name in event.signals:
             extra[name].append(event_role_id(event.name, WINDOW))
+    for name in bound.included:
+        weight, _ = bound.soft.get(name, (0, None))
+        if weight > 0:
+            extra[name].append(SOFT_ROLE)
     for group in bound.sync_groups:
         for name in group.members:
             extra[name].append(sync_role_id(group.name))
 
     signals: dict[str, SignalPlan] = {}
-    requirements: list[RequirementResult] = []
     notes: list[str] = []
     for name in bound.included:
         sig = run.signals.get(name)
@@ -377,11 +386,35 @@ def evaluate_run(run: Run, bound: BoundPolicy) -> RequiredResult:
     events = [_evaluate_event(event, signals) for event in bound.events]
     for result in events:
         notes.extend(result.notes)
-    sync_groups = _propagate_sync(bound.sync_groups, signals)
     for plan in signals.values():
         plan.samples = plan.samples.clip(plan.signal.n)
-    return RequiredResult(signals=signals, requirements=requirements, notes=notes, events=events,
-                          sync_groups=sync_groups)
+    return RequiredResult(signals=signals, requirements=requirements, notes=notes, events=events)
+
+
+def close(hard: RequiredResult, bound: BoundPolicy, soft: dict[str, np.ndarray] | None = None) -> RequiredResult:
+    """Add soft samples to a hard result and propagate sync groups. `hard` is left unchanged.
+
+    `soft` maps signal names to source indices to keep as preview samples; signals without a soft role ignore it.
+    """
+    plans: dict[str, SignalPlan] = {}
+    for name, plan in hard.signals.items():
+        samples = plan.samples
+        picks = (soft or {}).get(name)
+        if picks is not None and len(picks) and any(role.id == SOFT_ROLE for role in plan.legend):
+            samples = samples.union(SampleSet.from_points(picks, plan.bit_of(SOFT_ROLE)))
+        plans[name] = replace(plan, samples=samples)
+    sync_groups = _propagate_sync(bound.sync_groups, plans)
+    for plan in plans.values():
+        plan.samples = plan.samples.clip(plan.signal.n)
+    return replace(hard, signals=plans, sync_groups=sync_groups)
+
+
+def evaluate_run(run: Run, bound: BoundPolicy) -> RequiredResult:
+    """Evaluate every hard requirement and event of `bound` against `run`, then propagate sync groups.
+
+    Returns the retained samples, role legend, evidence and status of every included signal, with no soft samples.
+    """
+    return close(evaluate_hard(run, bound), bound)
 
 
 # --------------------------------------------------------------------------------------------------------------
