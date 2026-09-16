@@ -214,6 +214,17 @@ def read_artifact(source: str | Path | bytes) -> Artifact      # stdlib zipfile 
 
 ```
 open_source -> list_signals -> load_policy -> bind_policy -> load(included)
-  -> prepass -> ops (per signal) -> closure -> budget search (closure inside every evaluation)
-  -> container.write_zip -> self-verify (verify.checks, artifact only) -> bytes
+  -> plan.required.evaluate_hard (ops per signal, events)
+  -> reduce.rank.preview_order (once per soft signal)
+  -> budget search: plan.required.close (soft picks, sync groups) -> encode -> manifest, per trial
+  -> reconstruction errors -> container.write_zip -> self-verify (verify.checks, artifact only) -> bytes
 ```
+
+- `plan.required.evaluate_hard(run, bound)` evaluates the operators and events once. `close(hard, bound, soft)`
+  copies the plans, adds the soft picks with the `soft` role and propagates the sync groups; the hard result is
+  never changed, so every trial starts from the same place.
+- `plan.compile` owns the search. Its assembler caches compressed members by content, so a trial only compresses the
+  members whose bytes changed. `minimum_size(run, bound, digest=)` sizes the base artifact without writing it.
+- `reduce.rank.preview_order(v, cap)` returns the first `cap` entries of one fixed order of the signal's indices.
+- `baslt.advice` (`baslt explain`) reads an infeasible-budget report and, given the source and policy, re-sizes the
+  base artifact with one requirement or event relaxed at a time through `minimum_size`.

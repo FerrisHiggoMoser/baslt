@@ -20,6 +20,7 @@ _LAZY: dict[str, tuple[str, str]] = {
     "Artifact": ("baslt.container.reader", "Artifact"),
     "CompileResult": ("baslt.api", "CompileResult"),
     "init_policy": ("baslt.api", "init_policy"),
+    "explain": ("baslt.advice", "explain"),
 }
 
 __all__ = ["__version__", *_LAZY]

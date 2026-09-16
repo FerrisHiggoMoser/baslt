@@ -19,8 +19,9 @@ baslt compile SOURCE --policy POLICY [-o OUT] [--max-size SIZE] [--codec deflate
 ```
 
 Compiles one run. `OUT` defaults to `SOURCE` with the extension replaced by `.baslt`. `--max-size` overrides
-`artifact.max_size` and the artifact records `budget.source: cli`. On an infeasible budget nothing is written, the
-itemized minimum-size report is printed (or written to `--error-report`), and the exit code is 2.
+`artifact.max_size` and the artifact records `budget.source: cli`. Everything the policy protects is kept; the rest
+of the budget goes to preview samples, and the artifact never exceeds the budget. On an infeasible budget nothing is
+written, the itemized minimum-size report is printed (or written to `--error-report`), and the exit code is 2.
 
 ## `baslt verify`
 
@@ -92,8 +93,45 @@ replaced with `--force`. The starter policy always compiles as written.
 ## `baslt explain`
 
 ```
-baslt explain ERROR_REPORT.json [--source SOURCE --policy POLICY]
+baslt explain ERROR_REPORT.json [--source SOURCE --policy POLICY] [--max-size SIZE] [--json]
 ```
 
-Turns an infeasible-budget report into concrete suggestions (shorter windows, looser trajectory error, hysteresis for
-chattering thresholds, demoting requirements to soft, or the smallest budget that works).
+Turns an infeasible-budget report into suggestions. The report alone gives the smallest budget that works (rounded up
+to 64 KiB) and the largest requirements with the relaxation that usually helps each operator:
+
+```
+The hard requirements need 24,283 bytes; the budget is 12,288 (11,995 over).
+
+Smallest budget that works: max_size: 64 KiB
+
+Largest requirements
+  hard.aoa.window_extrema         241 samples  3,811 bytes  use a longer interval: every window keeps its own maximum and minimum
+  hard.aoa.threshold_crossing[1]  227 samples  2,748 bytes  add hysteresis or debounce: a noisy signal near the level crosses it many times
+```
+
+With `--source` and `--policy` (both are needed) each relaxation is measured: longer windows (×2, ×4), larger
+prominence, a separation, hysteresis (1 % of the signal's range, then 2 %) and debounce (10 and 20 sample spacings)
+for thresholds, a longer `min_duration` for violations, shorter event windows, and demoting a requirement or removing
+an event. The eight largest requirements and every event are tried. Each row gives the smallest artifact the changed
+policy allows, sized the way the compiler sizes it; `FITS` leaves 64 bytes for the policy text the edit itself adds.
+The mildest fitting change per requirement is then combined, loosening before dropping, until the run fits:
+
+```
+Measured on the source (smallest artifact; budget 12,288 bytes, FITS leaves 64 bytes for the policy edit)
+  FITS  11,743  hard.aoa.threshold_crossing[1]    demote to soft
+        14,952  hard.aoa.threshold_crossing[1]    debounce 0 s -> 0.02 s
+        20,349  hard.aoa.window_extrema           demote to soft
+        21,590  hard.aoa.window_extrema           interval 1 s -> 4 s
+        ...
+  ... 12 more with --json
+
+Together (fits at 11,654 bytes):
+  1. hard.aoa.threshold_crossing[1]: debounce 0 s -> 0.02 s
+  2. hard.aoa.window_extrema: interval 1 s -> 4 s
+  3. hard.aoa.threshold_crossing[0]: debounce 0 s -> 0.02 s
+```
+
+(The rocket example with `--anomaly alpha_chatter`, `tests/golden/m5_extrema_crossings.yaml` and `--max-size 12KiB`.)
+
+The budget measured against is `--max-size`, else the report's own when it came from `compile --max-size`, else the
+policy's. Nothing is written; the suggestions are edits to make in the policy file.

@@ -57,7 +57,14 @@ def _build_parser() -> tuple[argparse.ArgumentParser, dict[str, Handler]]:
     init_parser.add_argument("--format", choices=("yaml", "json"))
     init_parser.add_argument("--force", action="store_true", help="replace an existing output file")
     _common(init_parser)
-    return parser, {"compile": _compile, "verify": _verify, "inspect": _inspect, "policy": _policy}
+    explain_parser = commands.add_parser("explain", help="Suggest how to fit an infeasible budget")
+    explain_parser.add_argument("report", help="the .error.json an infeasible compile wrote")
+    explain_parser.add_argument("--source", help="measure each relaxation on this source (needs --policy)")
+    explain_parser.add_argument("--policy", help="the policy the report was compiled with")
+    explain_parser.add_argument("--max-size", help="budget to measure against instead of the policy's")
+    _common(explain_parser)
+    return parser, {"compile": _compile, "verify": _verify, "inspect": _inspect, "policy": _policy,
+                    "explain": _explain}
 
 
 def _emit(args, payload, message):
@@ -111,6 +118,14 @@ def _policy(args):
         print(result["text"], end="")
     elif not args.quiet:
         print(f"Wrote {result['output']}: {result['protected']} of {result['signals']} signals protected")
+    return 0
+
+
+def _explain(args):
+    from .advice import explain, render
+
+    result = explain(args.report, source=args.source, policy=args.policy, max_size=args.max_size)
+    _emit(args, result, render(result))
     return 0
 
 
