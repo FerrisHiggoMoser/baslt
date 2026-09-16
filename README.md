@@ -17,14 +17,18 @@ per run, so a sweep of thousands of runs can be triaged in a browser without ope
 The first end-to-end compiler supports NumPy arrays, CSV, HDF5 and MATLAB MAT-files (v5 to v7.3, including
 Simulink "structure with time" logs), with global, window and local extrema (prominence and separation), threshold
 crossings, violations, discrete state transitions, events with windows around their triggers, and sync groups that
-keep related signals sampled at the same instants. `compile`, `verify`, `inspect` and `policy init` are available in the CLI. Compilation verifies
-its output before writing it. Unsupported policy features produce an explicit error.
+keep related signals sampled at the same instants. Whatever the budget leaves after that is spent on a preview of
+every signal, weighted by the policy's soft priorities, and the artifact never exceeds the budget. `compile`,
+`verify`, `inspect`, `policy init` and `explain` are available in the CLI. Compilation verifies its output before
+writing it. Unsupported policy features (trajectories for now) produce an explicit error.
 
 ```sh
 baslt policy init run.mat -o review.yaml     # starter policy for every signal in the file
 baslt compile run.csv --policy review.json -o run.baslt
 baslt verify run.baslt --source run.csv
 baslt inspect run.baslt --json
+baslt compile run.csv --policy review.json --max-size 64KiB --error-report run.error.json
+baslt explain run.error.json --source run.csv --policy review.json   # what to relax when it does not fit
 ```
 
 ```python

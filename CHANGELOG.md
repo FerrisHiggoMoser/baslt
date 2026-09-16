@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Soft layer: every signal gets a nested min/max preview weighted by its priority, and the compiler searches for the
+  largest preview that fits the budget, measuring each trial exactly.
+- The manifest splits the budget into required, discretionary and overhead bytes and hard and soft samples per
+  signal, and records each signal's reconstruction error; the verifier checks all of it.
+- `baslt explain` suggests the smallest budget that works and, given the source, measures relaxing each requirement.
+- State transitions verify against the source when a value changes between samples sharing a timestamp.
 - Local extrema with prominence and separation, checked independently on the retained samples.
 - Events (falling, rising and equals triggers with windows) and sync groups, with verifier checks.
 - MATLAB MAT-file sources, v5 through scipy and v7.3 through h5py, including Simulink structure-with-time logs.
