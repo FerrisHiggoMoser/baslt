@@ -637,8 +637,88 @@ def bind_problems(artifact: Artifact) -> tuple[list[str], int]:
             count, found = _requirement_bind_problems(requirement, hard, unit)
             problems.extend(found)
             compared += count
+    units = {
+        entry.get("name"): entry.get("unit") if isinstance(entry.get("unit"), str) else None
+        for entry in artifact.index.get("signals", [])
+        if isinstance(entry, dict)
+    }
+    events = canonical.get("events") if isinstance(canonical.get("events"), dict) else {}
+    for event in artifact.index.get("events", []) or []:
+        if not isinstance(event, dict):
+            problems.append("an event entry in index.json is not an object")
+            continue
+        count, found = _event_bind_problems(event, events, units)
+        problems.extend(found)
+        compared += count
+    groups = canonical.get("sync_groups") if isinstance(canonical.get("sync_groups"), dict) else {}
+    for group in artifact.index.get("sync_groups", []) or []:
+        name = group.get("name") if isinstance(group, dict) else None
+        if name not in groups:
+            problems.append(f"sync_groups.{name}: the embedded policy has no such sync group")
     problems.extend(_budget_problems(artifact, canonical))
     return problems, compared
+
+
+EVENT_TRIGGERS: tuple[str, ...] = ("falls_below", "rises_above", "equals")
+EVENT_DURATIONS: tuple[str, ...] = ("debounce", "before", "after")
+
+
+def _event_bind_problems(event: dict, events: dict, units: dict) -> tuple[int, list[str]]:
+    """Re-bind one event's parameters from the embedded policy (docs/policy.md, "Events")."""
+    name = event.get("name")
+    where = f"events.{name}"
+    spec = events.get(name) if isinstance(name, str) else None
+    if not isinstance(spec, dict):
+        return 0, [f"{where}: the embedded policy has no such event"]
+    when = spec.get("when") if isinstance(spec.get("when"), dict) else {}
+    keep = spec.get("keep") if isinstance(spec.get("keep"), dict) else {}
+    condition = next((c for c in EVENT_TRIGGERS if c in when), None)
+    problems: list[str] = []
+    compared = 1
+    if event.get("condition") != condition:
+        problems.append(f"{where}.condition: index.json says {event.get('condition')!r}, the policy {condition!r}")
+        return compared, problems
+
+    unit = units.get(event.get("signal"))
+    written = when.get(condition)
+    claimed = event.get("value")
+    compared += 1
+    if condition == "equals":
+        parsed = parse_quantity(written)
+        if isinstance(claimed, str):
+            same = claimed == written
+        else:
+            same = parsed is not None and parsed[1] is None and _same_number(claimed, parsed[0])
+        if not same:
+            problems.append(f"{where}.value: index.json says {claimed!r}, the policy {written!r}")
+    else:
+        bound, problem = rebind("value", written, unit)
+        if problem is not None:
+            problems.append(f"{where}.value: {problem}")
+        elif not _same_number(claimed, bound):  # type: ignore[arg-type]
+            problems.append(f"{where}.value: index.json says {claimed!r}, but {written!r} binds to {bound!r}")
+
+    hysteresis = when.get("hysteresis", "0") if condition != "equals" else "0"
+    bound, problem = rebind("delta", hysteresis, unit)
+    compared += 1
+    if problem is not None:
+        problems.append(f"{where}.hysteresis: {problem}")
+    elif not _same_number(event.get("hysteresis"), bound):  # type: ignore[arg-type]
+        problems.append(f"{where}.hysteresis: index.json says {event.get('hysteresis')!r}, the policy binds {bound!r}")
+    for key in EVENT_DURATIONS:
+        source = when if key == "debounce" else keep
+        written_duration = source.get(key, "0 s") if not (key == "debounce" and condition == "equals") else "0 s"
+        bound, problem = rebind("duration", "0 s" if written_duration is None else written_duration, None)
+        compared += 1
+        if problem is not None:
+            problems.append(f"{where}.{key}: {problem}")
+        elif not _same_number(event.get(key), bound):  # type: ignore[arg-type]
+            problems.append(f"{where}.{key}: index.json says {event.get(key)!r}, the policy binds {bound!r}")
+    for key in ("occurrence", "expect", "severity"):
+        compared += 1
+        if event.get(key) != spec.get(key):
+            problems.append(f"{where}.{key}: index.json says {event.get(key)!r}, the policy {spec.get(key)!r}")
+    return compared, problems
 
 
 def _requirement_bind_problems(requirement: dict, hard: dict, unit: str | None) -> tuple[int, list[str]]:

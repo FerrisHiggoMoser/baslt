@@ -7,8 +7,8 @@ Every signal gets one `s/<k>` member holding its `v`, `idx` and `roles` arrays b
 its `t` descriptor at a `t/<j>` member. Signals whose retained timestamps are bit-identical share that
 member, which is what makes a clock stored once for a whole run.
 
-This milestone compiles the hard layer only: every retained sample is required by a hard contract or by
-the implicit `extent`/`gap` retention, so `budget.discretionary_bytes` is 0 and the artifact is the
+This milestone compiles the hard layer only: every retained sample is required by a hard contract, an event, a
+sync group or the implicit `extent`/`gap` retention, so `budget.discretionary_bytes` is 0 and the artifact is the
 smallest one the policy allows. A budget it does not fit is therefore infeasible outright, reported with
 an itemized breakdown instead of a search for a smaller artifact.
 """
@@ -41,7 +41,7 @@ from ..container.spec import (
 )
 from ..container.zipwriter import Member, compress_member, write_zip, zip_size
 from ..errors import CompileError, InfeasibleBudget, SelfVerifyFailed
-from ..manifest import RequirementEntry, SignalBudget, build_manifest
+from ..manifest import EventEntry, RequirementEntry, SignalBudget, SyncEntry, build_manifest
 from ..policy.schema import OP_SCHEMAS
 from .required import RequiredResult, SignalPlan, evaluate_run
 
@@ -205,7 +205,26 @@ def _index_and_members(
             }
         )
 
-    return {"container": CONTAINER_VERSION, "signals": signals}, signal_members, time_members, owned
+    events = [
+        {
+            "name": event.name,
+            "signal": event.signal,
+            "condition": event.trigger,
+            "value": event.value,
+            "hysteresis": float(event.hysteresis),
+            "debounce": float(event.debounce),
+            "occurrence": event.occurrence,
+            "expect": event.expect,
+            "before": float(event.before),
+            "after": float(event.after),
+            "signals": list(event.signals),
+            "severity": event.severity,
+        }
+        for event in bound.events
+    ]
+    sync_groups = [{"name": group.name, "members": list(group.members)} for group in bound.sync_groups]
+    index = {"container": CONTAINER_VERSION, "signals": signals, "events": events, "sync_groups": sync_groups}
+    return index, signal_members, time_members, owned
 
 
 def _policy_json(bound: BoundPolicy) -> dict:
@@ -260,6 +279,19 @@ def _infeasible(
                 "standalone_bytes": _standalone_bytes(item, result.mask, method, level),
             }
         )
+    for event in required.events:
+        samples = 0
+        standalone = 0
+        for item in encoded:
+            mask = 0
+            for role in item.plan.legend:
+                if role.id.startswith(f"event.{event.name}#"):
+                    mask |= 1 << role.bit
+            if mask:
+                samples += int(item.plan.samples.with_bits(mask).count())
+                standalone += _standalone_bytes(item, mask, method, level)
+        requirements.append({"id": f"events.{event.name}", "signal": event.signal, "op": "event",
+                             "samples": samples, "standalone_bytes": standalone})
     report = {
         "kind": "infeasible_budget",
         "max_bytes": int(max_bytes),
@@ -394,6 +426,15 @@ def compile_run(
         )
         for result in required.requirements
     ]
+    events = [
+        EventEntry(name=result.name, signal=result.signal, severity=result.severity, status=result.status,
+                   evidence=result.evidence)
+        for result in required.events
+    ]
+    sync_groups = [
+        SyncEntry(name=result.name, status=result.status, evidence=result.evidence)
+        for result in required.sync_groups
+    ]
 
     manifest, size = build_manifest(
         source=run.meta,
@@ -408,6 +449,8 @@ def compile_run(
         budget_source=bound.budget_source,
         codec=codec,
         level=level,
+        events=events,
+        sync_groups=sync_groups,
     )
 
     if bound.max_bytes is not None and size > bound.max_bytes:

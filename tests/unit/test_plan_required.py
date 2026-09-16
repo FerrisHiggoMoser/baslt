@@ -264,17 +264,14 @@ def test_unsupported_sections_are_named():
         plan_of(run, **sections)
 
     message = str(exc.value)
-    assert "events.MECO: events" in message
     assert "trajectories.ascent: trajectories" in message
-    assert "sync_groups.dyn: sync groups" in message
     assert "soft[0] (match 'q'): the soft layer" in message
+    assert "events.MECO" not in message and "sync_groups.dyn" not in message
 
 
 @pytest.mark.parametrize(
     ("section", "needle"),
     [
-        ({"events": {"MECO": {"when": {"signal": "q", "falls_below": 10.0}}}}, "events"),
-        ({"sync_groups": {"dyn": {"members": ["q", "thrust"]}}}, "sync groups"),
         ({"soft": [{"match": "*", "priority": "none"}]}, "the soft layer"),
     ],
 )

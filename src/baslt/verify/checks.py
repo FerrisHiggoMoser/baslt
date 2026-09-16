@@ -1476,6 +1476,273 @@ def _source_signals(source: object) -> dict[str, SourceSignal]:
     return out
 
 
+# --- events --------------------------------------------------------------------------------------------------
+
+
+def _legend_bit(entry: Mapping, legend_id: str) -> int | None:
+    for item in entry.get("roles", []) or []:
+        if isinstance(item, dict) and item.get("id") == legend_id and isinstance(item.get("bit"), int):
+            return int(item["bit"])
+    return None
+
+
+def _trigger_value(event: Mapping, entry: Mapping) -> tuple[float | None, str | None]:
+    value = event.get("value")
+    if event.get("condition") == "equals" and isinstance(value, str):
+        labels = entry.get("labels") or []
+        if value not in labels:
+            return None, f"equals {value!r} is not one of the signal's labels"
+        return float(labels.index(value)), None
+    number = _number(value)
+    return (number, None) if number is not None else (None, f"trigger value {value!r} is not a number")
+
+
+def _detect_triggers(t: np.ndarray, column: np.ndarray, event: Mapping, value: float) -> dict:
+    return reference.event_triggers(
+        t,
+        column,
+        str(event.get("condition")),
+        value,
+        hysteresis=_float(event.get("hysteresis")),
+        debounce=_float(event.get("debounce")),
+        occurrence=str(event.get("occurrence", "first")),
+    )
+
+
+def _as_source(view: SignalView, position: object) -> object:
+    return None if position is None else view.source_index(int(position))
+
+
+def _compare_triggers(claimed: Sequence, found: Sequence[Mapping], convert) -> list[str]:
+    problems: list[str] = []
+    if len(claimed) != len(found):
+        problems.append(f"{len(found)} selected trigger(s) are detected, {len(claimed)} are claimed")
+        return problems
+    for position, (claim, trigger) in enumerate(zip(claimed, found)):
+        if not isinstance(claim, dict):
+            problems.append(f"trigger {position} is not an object")
+            continue
+        tc = _number(claim.get("t"))
+        slack = _ulp_slack(float(trigger["t"]))
+        if tc is None or abs(tc - float(trigger["t"])) > slack:
+            problems.append(f"trigger {position}: detected at {trigger['t']!r}, claimed at {claim.get('t')!r}")
+        for key in ("index_before", "index_after"):
+            if claim.get(key) != convert(trigger[key]):
+                problems.append(f"trigger {position}: {key} is {convert(trigger[key])!r}, claimed {claim.get(key)!r}")
+        for key in ("at_start", "gap"):
+            if bool(claim.get(key)) != bool(trigger[key]):
+                problems.append(f"trigger {position}: {key} is {trigger[key]!r}, claimed {claim.get(key)!r}")
+    return problems
+
+
+def _event_checks(
+    event: Mapping,
+    claim: Mapping,
+    entries: Mapping[str, Mapping],
+    views: Mapping[str, SignalView],
+    sources: Mapping[str, SourceSignal],
+) -> list[Check]:
+    name = event.get("name")
+    base = f"events.{name}"
+    signal = event.get("signal")
+    view = views.get(str(signal))
+    entry = entries.get(str(signal))
+    if view is None or entry is None:
+        return [Check(f"{base}.trigger", FAIL, NO_BASIS, message=f"its trigger signal {signal!r} is missing")]
+    evidence = claim.get("evidence") if isinstance(claim.get("evidence"), dict) else {}
+    trigger_bit = _legend_bit(entry, f"event.{name}#trigger")
+    if claim.get("status") == "not_applicable":
+        flagged = int(np.count_nonzero(view.flagged(trigger_bit)))
+        if flagged:
+            return [Check(base, FAIL, NO_BASIS, message=f"it is not applicable but {flagged} sample(s) carry its role")]
+        return [Check(base, NOT_APPLICABLE, NO_BASIS, message="the trigger could not be evaluated")]
+    value, problem = _trigger_value(event, entry)
+    if problem is not None or view.v.ndim != 1:
+        return [Check(f"{base}.trigger", FAIL, NO_BASIS, message=problem or "the trigger signal is not scalar")]
+
+    claimed = evidence.get("triggers") if isinstance(evidence.get("triggers"), list) else []
+    checks: list[Check] = []
+
+    # trigger: detection on the retained samples returns the claimed triggers
+    problems: list[str] = []
+    detected = _detect_triggers(view.t, np.asarray(view.v, dtype=np.float64), event, value)
+    if detected["found"] != evidence.get("found"):
+        problems.append(f"{detected['found']} trigger(s) are detected on the retained samples, "
+                        f"{evidence.get('found')!r} are claimed")
+    if bool(detected["pending_at_end"]) != bool(evidence.get("pending_at_end")):
+        problems.append(f"pending_at_end is {detected['pending_at_end']!r}, claimed {evidence.get('pending_at_end')!r}")
+    problems.extend(_compare_triggers(claimed, detected["triggers"], lambda p: _as_source(view, p)))
+    flagged = view.flagged(trigger_bit)
+    for item in claimed:
+        for key in ("index_before", "index_after"):
+            at = view.position(item.get(key)) if isinstance(item, dict) and item.get(key) is not None else None
+            if at is not None and (at < 0 or not flagged[at]):
+                problems.append(f"trigger sample {item.get(key)!r} is not retained with the trigger role")
+    status = FAIL if problems else (WARN if claim.get("status") == "warn" else PASS)
+    expect = event.get("expect")
+    message = "detection on the retained samples returns the claimed triggers"
+    if expect is not None and evidence.get("found") != expect:
+        message = f"expected {expect} occurrence(s), found {evidence.get('found')!r}"
+        if not problems:
+            status = WARN
+            if claim.get("status") != "warn":
+                status, problems = FAIL, [f"{message}, but the event is not marked warn"]
+    check = verdict(f"{base}.trigger", problems, basis=BASIS_ARTIFACT, claimed=_fmt_count(evidence.get("found")),
+                    measured=str(detected["found"]), allowed="0", message=message)
+    if check.status == PASS and status == WARN:
+        check = Check(check.id, WARN, check.basis, check.claimed, check.measured, check.allowed, message)
+    checks.append(check)
+
+    # windows: every claimed window is a contiguous run of retained source samples that covers the window
+    windows = [w for w in evidence.get("windows", []) or [] if isinstance(w, dict)]
+    total = evidence.get("windows_total")
+    listed_signals = [s for s in event.get("signals", []) or [] if isinstance(s, str)]
+    before, after = _float(event.get("before")), _float(event.get("after"))
+    problems = []
+    live = [s for s in listed_signals if s in views and views[s].n_source > 0]
+    found_count = evidence.get("found") if isinstance(evidence.get("found"), int) else 0
+    selected = found_count if event.get("occurrence") == "all" else min(found_count, 1)
+    if total != selected * len(live):
+        problems.append(f"{selected * len(live)} window(s) are expected, {total!r} are claimed")
+    trigger_times = [item.get("t") for item in claimed if isinstance(item, dict)]
+    for window in windows:
+        target = views.get(str(window.get("signal")))
+        where = f"window of {window.get('signal')!r} at {window.get('trigger')!r}"
+        if target is None or window.get("signal") not in listed_signals:
+            problems.append(f"{where}: not a window signal of this event")
+            continue
+        if window.get("trigger") not in trigger_times:
+            problems.append(f"{where}: the trigger time is not one of the claimed triggers")
+        start, end = window.get("start"), window.get("end")
+        first, last = target.position(start), target.position(end)
+        if first < 0 or last < 0:
+            problems.append(f"{where}: its first or last sample is not retained")
+            continue
+        if last - first != int(end) - int(start):
+            problems.append(f"{where}: {int(end) - int(start) + 1} source samples, "
+                            f"but only {last - first + 1} are retained")
+            continue
+        wbit = _legend_bit(entries[str(window.get("signal"))], f"event.{name}#window")
+        if not target.flagged(wbit)[first : last + 1].all():
+            problems.append(f"{where}: some retained samples do not carry the window role")
+        tau = _float(window.get("trigger"))
+        if int(start) > 0 and not target.t[first] < tau - before:
+            problems.append(f"{where}: sample {start} at {target.t[first]!r} is inside the window, so it does not "
+                            "bound it")
+        if int(end) < target.n_source - 1 and not target.t[last] > tau + after:
+            problems.append(f"{where}: sample {end} at {target.t[last]!r} is inside the window, so it does not "
+                            "bound it")
+        clipped = tau - before < target.t[0] or tau + after > target.t[-1]
+        if bool(window.get("clipped")) != bool(clipped):
+            problems.append(f"{where}: clipped is {clipped}, claimed {window.get('clipped')!r}")
+    if listed_signals:
+        suffix = "" if total == len(windows) else f" ({len(windows)} of {total!r} listed)"
+        checks.append(verdict(f"{base}.windows", problems, basis=BASIS_ARTIFACT, claimed=_fmt_count(total),
+                              measured=str(len(windows)), allowed="0",
+                              message="every window is a contiguous run of retained samples covering it" + suffix))
+
+    src = sources.get(str(signal))
+    if src is not None:
+        problems = []
+        found = _detect_triggers(src.t, np.asarray(src.v, dtype=np.float64), event, value)
+        if found["found"] != evidence.get("found"):
+            problems.append(f"the source has {found['found']} trigger(s), {evidence.get('found')!r} are claimed")
+        problems.extend(_compare_triggers(claimed, found["triggers"], lambda p: p))
+        for window in windows:
+            other = sources.get(str(window.get("signal")))
+            if other is None:
+                continue
+            bounds = reference.event_window_indices(other.t, _float(window.get("trigger")), before, after)
+            if bounds is None or list(bounds) != [window.get("start"), window.get("end")]:
+                problems.append(f"window of {window.get('signal')!r}: the source gives {bounds}, "
+                                f"claimed {(window.get('start'), window.get('end'))}")
+        checks.append(verdict(f"{base}.source", problems, basis=BASIS_SOURCE, claimed=_fmt_count(evidence.get("found")),
+                              measured=str(found["found"]), allowed="0",
+                              message="the source's triggers and windows are the claimed ones"))
+    return checks
+
+
+# --- sync groups -----------------------------------------------------------------------------------------------
+
+
+def _propagating_bits(entry: Mapping) -> int:
+    mask = 0
+    for item in entry.get("roles", []) or []:
+        if not isinstance(item, dict) or not isinstance(item.get("bit"), int):
+            continue
+        legend_id = str(item.get("id", ""))
+        if legend_id in ("extent", "gap") or legend_id.startswith(("sync.", "link.")):
+            continue
+        mask |= 1 << int(item["bit"])
+    return mask
+
+
+def _sync_checks(
+    group: Mapping, claim: Mapping, entries: Mapping[str, Mapping], views: Mapping[str, SignalView]
+) -> list[Check]:
+    name = group.get("name")
+    check_id = f"sync_groups.{name}.alignment"
+    members = [m for m in group.get("members", []) or [] if isinstance(m, str)]
+    missing = [m for m in members if m not in views]
+    if missing:
+        return [Check(check_id, FAIL, NO_BASIS, message=f"member signal(s) {missing} are missing")]
+    stamps = []
+    for member in members:
+        view = views[member]
+        mask = np.uint64(_propagating_bits(entries[member]))
+        chosen = np.bitwise_and(view.roles, mask) != np.uint64(0)
+        stamps.append(view.t[chosen])
+    joined = np.ascontiguousarray(np.concatenate(stamps) if stamps else np.empty(0), dtype=np.float64)
+    times = np.unique(joined.view(np.int64)).view(np.float64)
+
+    problems: list[str] = []
+    aligned = unaligned = out_of_range = 0
+    for member in members:
+        view = views[member]
+        bit = _legend_bit(entries[member], f"sync.{name}")
+        flagged = view.flagged(bit)
+        if view.n == 0:
+            out_of_range += int(times.shape[0])
+            continue
+        inside = (times >= view.t[0]) & (times <= view.t[-1])
+        out_of_range += int(np.count_nonzero(~inside))
+        wanted = times[inside]
+        lo = np.searchsorted(view.t, wanted, side="left")
+        hi = np.searchsorted(view.t, wanted, side="right")
+        at = np.minimum(lo, view.n - 1)
+        exact = (hi > lo) & (view.t[at].view(np.int64) == wanted.view(np.int64)) & flagged[at]
+        aligned += int(np.count_nonzero(exact))
+        loose = np.flatnonzero(~exact)
+        unaligned += int(loose.size)
+        if loose.size:
+            right = lo[loose]
+            left = right - 1
+            valid = (left >= 0) & (right < view.n)
+            safe_left, safe_right = np.maximum(left, 0), np.minimum(right, view.n - 1)
+            bracket = (valid & (hi[loose] == lo[loose])
+                       & (view.idx[safe_right] - view.idx[safe_left] == 1)
+                       & flagged[safe_left] & flagged[safe_right])
+            if not bracket.all():
+                bad = float(wanted[loose[np.flatnonzero(~bracket)[0]]])
+                problems.append(f"timestamp {bad!r} is neither retained in {member!r} nor bracketed by adjacent "
+                                "source samples carrying the group's role")
+    evidence = claim.get("evidence") if isinstance(claim.get("evidence"), dict) else {}
+    measured = {"propagating": int(times.shape[0]), "aligned": aligned, "unaligned": unaligned,
+                "out_of_range": out_of_range}
+    for key, count in measured.items():
+        if evidence.get(key) != count:
+            problems.append(f"{key} is {count}, claimed {evidence.get(key)!r}")
+    if claim.get("status") != ("warn" if unaligned else "pass"):
+        problems.append(f"the group is marked {claim.get('status')!r} with {unaligned} unaligned timestamp(s)")
+    check = verdict(check_id, problems, basis=BASIS_ARTIFACT, claimed=_fmt_count(evidence.get("unaligned")),
+                    measured=str(unaligned), allowed="0",
+                    message=f"{measured['propagating']} timestamp(s) aligned or bracketed in every member")
+    if check.status == PASS and unaligned:
+        check = Check(check.id, WARN, check.basis, check.claimed, check.measured, check.allowed,
+                      f"{unaligned} timestamp(s) have no exact sample in some member and are bracketed instead")
+    return [check]
+
+
 # --- the whole pass ----------------------------------------------------------------------------------------
 
 
@@ -1621,4 +1888,21 @@ def verify_artifact(
     for req_id in indexed:
         if req_id not in claimed_ids:
             checks.append(Check(req_id, FAIL, NO_BASIS, message="index.json records it, but the manifest does not"))
+
+    by_name = {str(entry.get("name")): entry for entry in entries}
+    for section, runner in (("events", "event"), ("sync_groups", "sync")):
+        declared = {str(item.get("name")): item for item in parsed.index.get(section, []) or []
+                    if isinstance(item, dict)}
+        claimed = {str(item.get("name")): item for item in parsed.manifest.get(section, []) or []
+                   if isinstance(item, dict)}
+        for name in sorted(set(declared) ^ set(claimed)):
+            where = "index.json" if name in declared else "the manifest"
+            checks.append(Check(f"{section}.{name}", FAIL, NO_BASIS, message=f"only {where} records it"))
+        for name, item in declared.items():
+            if name not in claimed:
+                continue
+            if runner == "event":
+                checks.extend(_event_checks(item, claimed[name], by_name, views, source_signals))
+            else:
+                checks.extend(_sync_checks(item, claimed[name], by_name, views))
     return result

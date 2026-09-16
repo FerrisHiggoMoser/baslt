@@ -92,6 +92,38 @@ class RequirementEntry:
 
 
 @dataclass(slots=True)
+class EventEntry:
+    """One row of `manifest.events`."""
+
+    name: str
+    signal: str
+    severity: str
+    status: str
+    evidence: dict = field(default_factory=dict)
+
+    def to_json(self) -> dict:
+        return {
+            "name": self.name,
+            "signal": self.signal,
+            "severity": self.severity,
+            "status": self.status,
+            "evidence": cap_evidence(dict(self.evidence)),
+        }
+
+
+@dataclass(slots=True)
+class SyncEntry:
+    """One row of `manifest.sync_groups`."""
+
+    name: str
+    status: str
+    evidence: dict = field(default_factory=dict)
+
+    def to_json(self) -> dict:
+        return {"name": self.name, "status": self.status, "evidence": cap_evidence(dict(self.evidence))}
+
+
+@dataclass(slots=True)
 class SignalBudget:
     """One row of `manifest.budget.signals`."""
 
@@ -140,6 +172,8 @@ def build_manifest(
     codec: str = "deflate",
     level: int = DEFAULT_LEVEL,
     discretionary_bytes: int = 0,
+    events: Sequence[EventEntry] = (),
+    sync_groups: Sequence[SyncEntry] = (),
 ) -> tuple[dict, int]:
     """Build the manifest and the artifact size it describes.
 
@@ -152,7 +186,9 @@ def build_manifest(
 
     base = {
         "status": overall_status(
-            [entry.status for entry in requirements],
+            [entry.status for entry in requirements]
+            + [entry.status for entry in events]
+            + [entry.status for entry in sync_groups],
             on_not_applicable=policy.artifact.on_not_applicable,
         ),
         "baslt": {"version": __version__, "container": CONTAINER_VERSION},
@@ -164,9 +200,9 @@ def build_manifest(
         ),
         "policy": {"name": policy.name, "sha256": policy.sha256},
         "requirements": [entry.to_json() for entry in requirements],
-        "events": [],
+        "events": [entry.to_json() for entry in events],
         "trajectories": [],
-        "sync_groups": [],
+        "sync_groups": [entry.to_json() for entry in sync_groups],
     }
     budget_signals = [entry.to_json() for entry in signals]
 
