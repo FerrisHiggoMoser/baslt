@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import numpy as np
-from hypothesis import given
-from hypothesis import strategies as st
+import pytest
+
+pytest.importorskip("hypothesis")
+from hypothesis import given  # noqa: E402
+from hypothesis import strategies as st  # noqa: E402
 
 from baslt.sampleset import SampleSet
 

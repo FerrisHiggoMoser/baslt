@@ -27,8 +27,10 @@ import math
 
 import numpy as np
 import pytest
-from hypothesis import assume, given
-from hypothesis import strategies as st
+
+pytest.importorskip("hypothesis")
+from hypothesis import assume, given  # noqa: E402
+from hypothesis import strategies as st  # noqa: E402
 from reference.crossings_loop import threshold_crossings, violation_runs
 
 from baslt.ops._common import gap_samples

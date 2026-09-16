@@ -5,8 +5,11 @@ from __future__ import annotations
 import struct
 
 import numpy as np
-from hypothesis import assume, given
-from hypothesis import strategies as st
+import pytest
+
+pytest.importorskip("hypothesis")
+from hypothesis import assume, given  # noqa: E402
+from hypothesis import strategies as st  # noqa: E402
 
 from baslt.ops import global_extrema, state_transitions, window_extrema
 from baslt.ops.window_extrema import bucket_ids
