@@ -38,6 +38,10 @@ dev = [
     "pyyaml>=6",
 ]
 
+[tool.uv]
+# Rebuild the local package whenever its sources change, not only when this file does.
+cache-keys = [{ file = "pyproject.toml" }, { file = "src/**/*.py" }]
+
 [tool.hatch.version]
 path = "src/baslt/_version.py"
 
