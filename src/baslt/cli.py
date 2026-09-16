@@ -49,7 +49,15 @@ def _build_parser() -> tuple[argparse.ArgumentParser, dict[str, Handler]]:
     inspect_parser = commands.add_parser("inspect", help="List signals or summarize an artifact")
     inspect_parser.add_argument("source")
     _common(inspect_parser)
-    return parser, {"compile": _compile, "verify": _verify, "inspect": _inspect}
+    policy_parser = commands.add_parser("policy", help="Work with policy files")
+    policy_actions = policy_parser.add_subparsers(dest="policy_action", metavar="ACTION", required=True)
+    init_parser = policy_actions.add_parser("init", help="Write a starter policy for a source")
+    init_parser.add_argument("source")
+    init_parser.add_argument("-o", "--output", help="policy file to write; printed to stdout when omitted")
+    init_parser.add_argument("--format", choices=("yaml", "json"))
+    init_parser.add_argument("--force", action="store_true", help="replace an existing output file")
+    _common(init_parser)
+    return parser, {"compile": _compile, "verify": _verify, "inspect": _inspect, "policy": _policy}
 
 
 def _emit(args, payload, message):
@@ -89,6 +97,20 @@ def _inspect(args):
         shape = entry.get("shape", [entry.get("n"), entry.get("components", 1)])
         lines.append(f"{entry['name']}  {shape}  {dtype}  {entry.get('unit') or '-'}  {entry['kind']}")
     _emit(args, result, "\n".join(lines))
+    return 0
+
+
+def _policy(args):
+    from .api import init_policy
+
+    result = init_policy(args.source, output=args.output, force=args.force, format=args.format)
+    payload = {key: value for key, value in result.items() if key != "text"}
+    if args.json:
+        _emit(args, payload, "")
+    elif args.output is None:
+        print(result["text"], end="")
+    elif not args.quiet:
+        print(f"Wrote {result['output']}: {result['protected']} of {result['signals']} signals protected")
     return 0
 
 

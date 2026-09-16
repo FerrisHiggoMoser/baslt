@@ -153,3 +153,40 @@ def inspect(source) -> dict:
     adapter = open_source(source)
     return {"status": "pass", "format": adapter.format,
             "signals": [asdict(info) for info in adapter.list_signals()]}
+
+
+def init_policy(source, *, output=None, force=False, format=None) -> dict:
+    """Write (or return) a starter policy for a source's signals.
+
+    The format is `format` ("yaml" or "json"), else taken from the output suffix, else YAML. An existing output is
+    only replaced with `force`. The result holds the policy text, its mapping and where it was written.
+    """
+    from .policy import load_policy
+    from .policy.scaffold import render_json, render_yaml, starter_policy
+    from .sources import open_source
+
+    destination = Path(output) if output is not None else None
+    fmt = format or ("json" if destination is not None and destination.suffix.lower() == ".json" else "yaml")
+    if fmt not in ("yaml", "json"):
+        raise UsageError("format must be 'yaml' or 'json'")
+    is_file = isinstance(source, (str, Path))
+    adapter = open_source(source)
+    infos = adapter.list_signals()
+    if not infos:
+        raise SourceError(f"no signals found in {source if is_file else 'the in-memory source'}")
+    name = Path(source).stem if is_file else "run"
+    size = Path(source).stat().st_size if is_file else None
+    policy = starter_policy(infos, name=name, source_size=size, require_time=is_file)
+    load_policy(policy)  # the starter policy must always be valid
+    label = Path(source).name if is_file else "in-memory data"
+    text = render_json(policy) if fmt == "json" else render_yaml(policy, infos, source_label=label,
+                                                                 require_time=is_file)
+    if destination is not None:
+        if is_file and destination.resolve() == Path(source).resolve():
+            raise UsageError("output must differ from the source file")
+        if destination.exists() and not force:
+            raise UsageError(f"{destination} already exists; use --force (force=True) to replace it")
+        _write(destination, text.encode("utf-8"))
+    protected = len(policy.get("hard", {}))
+    return {"status": "pass", "output": str(destination) if destination is not None else None, "format": fmt,
+            "signals": len(infos), "protected": protected, "policy": policy, "text": text}

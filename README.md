@@ -14,11 +14,13 @@ per run, so a sweep of thousands of runs can be triaged in a browser without ope
 
 ## Available now
 
-The first end-to-end compiler supports NumPy arrays, CSV and HDF5, with global and window extrema, threshold
-crossings, violations and discrete state transitions. `compile`, `verify` and `inspect` are available in the CLI.
-Compilation verifies its output before writing it. Unsupported policy features produce an explicit error.
+The first end-to-end compiler supports NumPy arrays, CSV, HDF5 and MATLAB MAT-files (v5 to v7.3, including
+Simulink "structure with time" logs), with global and window extrema, threshold crossings, violations and discrete
+state transitions. `compile`, `verify`, `inspect` and `policy init` are available in the CLI. Compilation verifies
+its output before writing it. Unsupported policy features produce an explicit error.
 
 ```sh
+baslt policy init run.mat -o review.yaml     # starter policy for every signal in the file
 baslt compile run.csv --policy review.json -o run.baslt
 baslt verify run.baslt --source run.csv
 baslt inspect run.baslt --json
@@ -40,7 +42,8 @@ verification = baslt.verify_artifact("run.baslt")
 
 ## Planned v0.1 scope
 
-- Inputs: MATLAB `.mat` (v5/v7 and v7.3), HDF5, CSV, and NumPy arrays in memory.
+- Inputs: MATLAB `.mat` (v5/v7 and v7.3), HDF5, CSV, and NumPy arrays in memory. MAT-files carry no units, so
+  declare them under `signals.decl` when a limit has one.
 - Policy file with hard guarantees and soft preferences, units included (`65 kPa`, `7 deg`, `100 ms`, `2 MiB`).
 - `baslt compile`, `baslt verify`, `baslt report`, `baslt sweep`, `baslt inspect`, `baslt policy init`,
   `baslt explain`.
