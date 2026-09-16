@@ -1,0 +1,309 @@
+{
+  "requirements": [
+    {
+      "evidence": {
+        "components": [
+          {
+            "component": 0,
+            "max": {
+              "index": 65328,
+              "t": 65.328,
+              "value": 66934.68287371741
+            },
+            "min": {
+              "index": 1,
+              "t": 0.001,
+              "value": 0.0
+            }
+          }
+        ]
+      },
+      "id": "hard.q_dyn.global_extrema",
+      "op": "global_extrema",
+      "severity": "info",
+      "signal": "aero/q",
+      "status": "pass"
+    },
+    {
+      "evidence": {
+        "count": 2,
+        "crossings": [
+          {
+            "component": 0,
+            "edge": "rising",
+            "index_before": 57406,
+            "t": 57.406614450316255
+          },
+          {
+            "component": 0,
+            "edge": "falling",
+            "index_before": 74667,
+            "t": 74.66704143379884
+          }
+        ],
+        "falling": 1,
+        "gap_flips": 0,
+        "pending_at_end": false,
+        "rising": 1
+      },
+      "id": "hard.q_dyn.threshold_crossing[0]",
+      "op": "threshold_crossing",
+      "severity": "info",
+      "signal": "aero/q",
+      "status": "pass"
+    },
+    {
+      "evidence": {
+        "count": 0,
+        "runs": [],
+        "total_duration": 0.0
+      },
+      "id": "hard.q_dyn.violation[0]",
+      "op": "violation",
+      "severity": "limit",
+      "signal": "aero/q",
+      "status": "pass"
+    },
+    {
+      "evidence": {
+        "buckets": 121,
+        "buckets_with_finite": 121,
+        "interval": 1.0,
+        "origin": 0.0
+      },
+      "id": "hard.aoa.window_extrema",
+      "op": "window_extrema",
+      "severity": "info",
+      "signal": "aero/alpha",
+      "status": "pass"
+    },
+    {
+      "evidence": {
+        "count": 8,
+        "crossings": [
+          {
+            "component": 0,
+            "edge": "falling",
+            "index_before": 58184,
+            "t": 58.18445640793649
+          },
+          {
+            "component": 0,
+            "edge": "rising",
+            "index_before": 58186,
+            "t": 58.186194076370434
+          },
+          {
+            "component": 0,
+            "edge": "falling",
+            "index_before": 58187,
+            "t": 58.187879664803454
+          },
+          {
+            "component": 0,
+            "edge": "rising",
+            "index_before": 58188,
+            "t": 58.18831400355346
+          },
+          {
+            "component": 0,
+            "edge": "falling",
+            "index_before": 58189,
+            "t": 58.189115868227766
+          },
+          {
+            "component": 0,
+            "edge": "rising",
+            "index_before": 58203,
+            "t": 58.203768753406194
+          },
+          {
+            "component": 0,
+            "edge": "falling",
+            "index_before": 58204,
+            "t": 58.20460298353557
+          },
+          {
+            "component": 0,
+            "edge": "rising",
+            "index_before": 58213,
+            "t": 58.21368006611513
+          }
+        ],
+        "falling": 4,
+        "gap_flips": 0,
+        "pending_at_end": false,
+        "rising": 4
+      },
+      "id": "hard.aoa.threshold_crossing[0]",
+      "op": "threshold_crossing",
+      "severity": "info",
+      "signal": "aero/alpha",
+      "status": "pass"
+    },
+    {
+      "evidence": {
+        "count": 12,
+        "crossings": [
+          {
+            "component": 0,
+            "edge": "rising",
+            "index_before": 23375,
+            "t": 23.375881059134198
+          },
+          {
+            "component": 0,
+            "edge": "falling",
+            "index_before": 23425,
+            "t": 23.42563987536047
+          },
+          {
+            "component": 0,
+            "edge": "rising",
+            "index_before": 23426,
+            "t": 23.426216436626266
+          },
+          {
+            "component": 0,
+            "edge": "falling",
+            "index_before": 23427,
+            "t": 23.42787454492585
+          },
+          {
+            "component": 0,
+            "edge": "rising",
+            "index_before": 87865,
+            "t": 87.8659382184197
+          },
+          {
+            "component": 0,
+            "edge": "falling",
+            "index_before": 87866,
+            "t": 87.86616491803487
+          },
+          {
+            "component": 0,
+            "edge": "rising",
+            "index_before": 87872,
+            "t": 87.87288928301695
+          },
+          {
+            "component": 0,
+            "edge": "falling",
+            "index_before": 87918,
+            "t": 87.91895769019149
+          },
+          {
+            "component": 0,
+            "edge": "rising",
+            "index_before": 87919,
+            "t": 87.91904558027257
+          },
+          {
+            "component": 0,
+            "edge": "falling",
+            "index_before": 87928,
+            "t": 87.92805580057998
+          },
+          {
+            "component": 0,
+            "edge": "rising",
+            "index_before": 87930,
+            "t": 87.93075176482446
+          },
+          {
+            "component": 0,
+            "edge": "falling",
+            "index_before": 87931,
+            "t": 87.93118474855987
+          }
+        ],
+        "falling": 6,
+        "gap_flips": 0,
+        "pending_at_end": false,
+        "rising": 6
+      },
+      "id": "hard.aoa.threshold_crossing[1]",
+      "op": "threshold_crossing",
+      "severity": "info",
+      "signal": "aero/alpha",
+      "status": "pass"
+    },
+    {
+      "evidence": {
+        "components": [
+          {
+            "component": 0,
+            "max": {
+              "index": 93291,
+              "t": 93.291,
+              "value": 2231889.014354978
+            },
+            "min": {
+              "index": 120000,
+              "t": 120.0,
+              "value": 2.769468512402734e-52
+            }
+          }
+        ]
+      },
+      "id": "hard.thrust.global_extrema",
+      "op": "global_extrema",
+      "severity": "info",
+      "signal": "prop/thrust",
+      "status": "pass"
+    },
+    {
+      "evidence": {
+        "distinct_count": 4,
+        "distinct_values": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "transitions": 4
+      },
+      "id": "hard.mode.state_transitions",
+      "op": "state_transitions",
+      "severity": "info",
+      "signal": "gnc/mode",
+      "status": "pass"
+    }
+  ],
+  "retained": [
+    {
+      "n": 3,
+      "name": "prop/thrust"
+    },
+    {
+      "n": 10,
+      "name": "aero/q"
+    },
+    {
+      "n": 273,
+      "name": "aero/alpha"
+    },
+    {
+      "n": 2,
+      "name": "nav/position"
+    },
+    {
+      "n": 2,
+      "name": "nav/velocity"
+    },
+    {
+      "n": 6,
+      "name": "gnc/mode"
+    },
+    {
+      "n": 2,
+      "name": "thermal/skin_temp"
+    },
+    {
+      "n": 2,
+      "name": "gnc/elevon_cmd"
+    }
+  ],
+  "status": "pass"
+}

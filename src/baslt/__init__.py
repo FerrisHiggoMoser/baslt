@@ -12,7 +12,14 @@ from importlib import import_module
 from ._version import __version__
 
 # Public name -> (module, attribute). Resolved on first access.
-_LAZY: dict[str, tuple[str, str]] = {}
+_LAZY: dict[str, tuple[str, str]] = {
+    "compile": ("baslt.api", "compile"),
+    "inspect": ("baslt.api", "inspect"),
+    "verify_artifact": ("baslt.api", "verify"),
+    "read_artifact": ("baslt.container.reader", "read_artifact"),
+    "Artifact": ("baslt.container.reader", "Artifact"),
+    "CompileResult": ("baslt.api", "CompileResult"),
+}
 
 __all__ = ["__version__", *_LAZY]
 

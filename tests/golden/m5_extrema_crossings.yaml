@@ -1,0 +1,27 @@
+version: 1
+name: rocket_m5
+artifact:
+  max_size: 2 MiB
+signals:
+  time: t
+  decl:
+    q_dyn: {path: aero/q, unit: Pa}
+    aoa: {path: aero/alpha, unit: deg}
+    thrust: {path: prop/thrust, unit: N}
+    mode: {path: gnc/mode, kind: discrete}
+hard:
+  q_dyn:
+    global_extrema: {}
+    threshold_crossing:
+      - {value: 65 kPa, hysteresis: 1 kPa, debounce: 100 ms, tolerance: 5 ms}
+    violation:
+      - {above: 70 kPa, min_duration: 100 ms}
+  aoa:
+    window_extrema: {interval: 1 s}
+    threshold_crossing:
+      - {value: -7 deg}
+      - {value: 7 deg}
+  thrust:
+    global_extrema: {}
+  mode:
+    state_transitions: {}

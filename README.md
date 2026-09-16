@@ -12,6 +12,32 @@ and tells you the smallest size that would work, instead of quietly dropping som
 It is designed to stay out of the way of simulation pipelines: runs are compiled after the fact, one tiny artifact
 per run, so a sweep of thousands of runs can be triaged in a browser without opening the raw logs.
 
+## Available now
+
+The first end-to-end compiler supports NumPy arrays, CSV and HDF5, with global and window extrema, threshold
+crossings, violations and discrete state transitions. `compile`, `verify` and `inspect` are available in the CLI.
+Compilation verifies its output before writing it. Unsupported policy features produce an explicit error.
+
+```sh
+baslt compile run.csv --policy review.json -o run.baslt
+baslt verify run.baslt --source run.csv
+baslt inspect run.baslt --json
+```
+
+```python
+import baslt
+
+result = baslt.compile({"t": t, "pressure": pressure}, {
+    "version": 1,
+    "hard": {"pressure": {"global_extrema": {}}},
+}, output="run.baslt")
+verification = baslt.verify_artifact("run.baslt")
+```
+
+`baslt.api.verify` also accepts `source=` for source-backed checks. For a pipeline hook, use
+`on_error="record", suggestions="off", threads=1`; the returned result carries failures and the adjacent
+`.error.json` explains them. See [the CLI reference](docs/cli.md) and [contracts](docs/contracts.md).
+
 ## Planned v0.1 scope
 
 - Inputs: MATLAB `.mat` (v5/v7 and v7.3), HDF5, CSV, and NumPy arrays in memory.
