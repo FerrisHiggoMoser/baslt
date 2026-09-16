@@ -126,7 +126,9 @@ Roles: `#edge`, `#worst`. Default severity: `limit`.
 ## state_transitions
 
 Guarantee: the first sample, every sample whose value differs from the previous sample (NaN equals NaN), and the last
-sample are retained. Hold reconstruction equals the source value at every source timestamp.
+sample are retained. Holding the last retained sample at or before each source index reproduces every source sample,
+so hold reconstruction equals the source value at every source timestamp (where timestamps repeat, the value of the
+last sample at that timestamp).
 
 Evidence: transition count, distinct values.
 

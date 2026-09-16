@@ -1322,13 +1322,18 @@ def _state_transition_source_check(
     if claimed_distinct is not None and not _same_scalar(claimed_distinct, distinct):
         problems.append(f"the manifest claims {claimed_distinct!r} distinct values, the source has {distinct}")
 
-    held = reference.reconstruct_hold(view.t, view.v, src.t)
-    differs = _same_array(np.ascontiguousarray(src.v), held)
-    if differs >= 0:
-        problems.append(
-            f"hold reconstruction differs from the source at sample {differs}: "
-            f"{held[differs]!r} instead of {src.v[differs]!r}"
-        )
+    # Hold by source index: the last retained sample at or before each source sample. Unlike holding by time, this
+    # stays exact when a value changes between two samples that share a timestamp.
+    n_source = int(src.v.shape[0])
+    if view.n and n_source == view.n_source:
+        last = np.searchsorted(view.idx, np.arange(n_source), side="right") - 1
+        held = view.v[np.maximum(last, 0)]
+        differs = _same_array(np.ascontiguousarray(src.v), held)
+        if differs >= 0:
+            problems.append(
+                f"hold reconstruction differs from the source at sample {differs}: "
+                f"{held[differs]!r} instead of {src.v[differs]!r}"
+            )
     return verdict(
         f"{req_id}.source",
         problems,

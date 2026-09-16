@@ -41,6 +41,7 @@ own unit table and its own simple reference algorithms, and may not import the c
 | violation | `runs` | artifact | Boundary pairs straddle the limit, durations meet `min_duration`, the worst sample lies inside. |
 | violation | `fidelity` | artifact | Detection on the reconstruction returns exactly the claimed runs. |
 | state_transitions | `transitions` | artifact | Hold transitions over retained samples equal the flagged transitions. |
+| state_transitions | `source` | source | Every source change is retained and flagged, the counts match, and holding the last retained sample at or before each source index reproduces the source. |
 | event | `trigger` | artifact | Detecting the event on the retained samples returns the claimed `found` count, `pending_at_end` and selected triggers (times within tolerance, bracket indices exact), and every bracket sample carries the trigger role. An `expect` mismatch must be marked `warn`. |
 | event | `windows` | artifact | The window count is the selected triggers times the non-empty listed signals; each listed window is a contiguous run of retained source samples carrying the window role, bounded by samples outside the window (or the signal's ends), with the right `clipped` flag. |
 | event | `source` | source | Triggers and window bounds recomputed from the source match the claims. |

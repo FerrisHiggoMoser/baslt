@@ -91,3 +91,12 @@ def rocket_summary():
 
 def test_rocket_golden():
     assert rocket_summary() == json.loads((ROOT / "tests/golden/rocket_m5_evidence.json").read_text())
+
+
+@pytest.mark.minimal
+def test_a_transition_between_samples_sharing_a_timestamp_verifies_against_the_source():
+    source = {"mode": (np.array([0.05, 0.06, 0.06]), np.array([1, 1, 3]))}
+    policy = {"version": 1, "signals": {"decl": {"mode": {"kind": "discrete"}}},
+              "hard": {"mode": {"state_transitions": {}}}}
+    result = compile(source, policy)
+    assert verify(result.bytes, source=source).status == "pass"
