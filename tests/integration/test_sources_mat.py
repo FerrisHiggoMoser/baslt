@@ -369,7 +369,9 @@ def test_v73_is_recognized_without_the_extension(tmp_path, t):
     plain = tmp_path / "logfile"
     plain.write_bytes(path.read_bytes())
     assert isinstance(open_source(plain), MatSource)
-    assert open_source(renamed).format == "hdf5"  # an explicit .h5 extension still means plain HDF5
+    # save('run.h5', ..., '-v7.3') writes a MAT-file with an .h5 name: the header text wins over the extension
+    assert isinstance(open_source(renamed), MatSource)
+    assert open_source(renamed, format="hdf5").format == "hdf5"  # plain HDF5 only when asked for
     assert isinstance(open_source(renamed, format="mat73"), MatSource)
     assert isinstance(open_source(renamed, format="matlab"), MatSource)
 

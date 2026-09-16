@@ -108,11 +108,16 @@ def open_source(source: str | Path | Mapping, *, format: str | None = None, **op
 ```
 
 Time association order: `time_hints[name]` → dataset attribute `time`/`t` → sibling named `t`, `time`, `Time`,
-`timestamp` or `tout` in the same group/struct → `global_time` → top-level `tout` → `SourceError`. Time signals
-themselves are not listed as data signals.
+`timestamp` or `tout` in the same group/struct → `global_time` → such a clock in the nearest parent group (so a
+file-level `/time` serves `/simout/q_dyn`) → top-level `tout` → `SourceError`. Time signals themselves are not listed
+as data signals.
 
 Registered formats, in sniffing order: `mat` (aliases `mat73`, `matlab`), `hdf5`, `csv`; `numpy` is chosen for
 in-memory input. MAT comes before HDF5 because a v7.3 MAT-file is also a valid HDF5 file, with reversed dimensions.
+For the same reason a `.h5`/`.hdf5` file whose header text starts with `MATLAB` (`save('simout.h5', ..., '-v7.3')`)
+opens with the MAT reader; `format="hdf5"` still reads it as plain HDF5. MATLAB objects (timeseries, Simulink
+datasets) cannot be read without MATLAB; a source with nothing else says so and points to the Structure With Time
+and Array logging formats.
 
 MAT-files (`sources/mat_src.py`, `sources/matv73.py`): versions 4–7.2 are read with `scipy.io.loadmat` using MATLAB's
 own types (integer-valued doubles stay doubles); a file that holds complex data is read a second time with native

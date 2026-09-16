@@ -126,7 +126,8 @@ def open_source(source: str | os.PathLike[str] | Mapping[str, Any] | Run, *, for
     """Open a source for listing and loading.
 
     A `Mapping` or `Run` opens the in-memory adapter. A path is resolved by explicit `format`, then by
-    extension, then by sniffing the first bytes of the file. `options` are passed to the adapter.
+    extension, then by sniffing the first bytes of the file. A `.h5`/`.hdf5` file that starts with MATLAB's header
+    text is a v7.3 MAT-file and opens with the MAT reader. `options` are passed to the adapter.
     """
     from ..signals import Run
 
@@ -152,6 +153,13 @@ def open_source(source: str | os.PathLike[str] | Mapping[str, Any] | Run, *, for
         if suffix and suffix in entry.extensions:
             cls = entry.load()
             _require_file(path)
+            if entry.format == "hdf5":
+                # MATLAB's save -v7.3 writes HDF5 whatever the file is called (save('simout.h5', ..., '-v7.3')).
+                # Read plainly, such a file shows transposed arrays and #refs# internals, so its header text wins
+                # over the extension; format="hdf5" still opens it as plain HDF5.
+                mat = _REGISTRY["mat"].load()
+                if mat.sniff(path, read_head(path)):
+                    return _construct(mat, path, options)
             return _construct(cls, path, options)
 
     _require_file(path)
@@ -320,7 +328,8 @@ def resolve_time(
     """Return the canonical name of the time signal of `name`.
 
     Order: `time_hints[name]` -> the signal's `time`/`t` attribute -> a sibling named t, time, Time, timestamp
-    or tout in the same group -> `global_time` -> `fallbacks` (top-level `tout` for files) -> SourceError.
+    or tout in the same group -> `global_time` -> such a clock in the nearest parent group (a file-level `/time`
+    serves every group below it) -> `fallbacks` (top-level `tout` for files) -> SourceError.
     `exists(name)` tells whether a usable time array with that canonical name exists.
     """
     group, _ = split_name(name)
@@ -345,12 +354,19 @@ def resolve_time(
         if found is None:
             raise SourceError(f"global time signal {global_time!r} is not a time array in the source")
         return found
+    parent = group
+    while parent:
+        parent, _ = split_name(parent)
+        for leaf in TIME_SIBLINGS:
+            candidate = f"{parent}/{leaf}" if parent else leaf
+            if exists(candidate):
+                return candidate
     for candidate in fallbacks:
         if candidate != name and exists(candidate):
             return candidate
     raise SourceError(
-        f"no time signal for {name!r}: add a sibling named t, time, Time, timestamp or tout, give it a time "
-        "attribute, or set a global time signal (signals.time in the policy)"
+        f"no time signal for {name!r}: add a sibling (or parent-group array) named t, time, Time, timestamp or "
+        "tout, give it a time attribute, or set a global time signal (signals.time in the policy)"
     )
 
 

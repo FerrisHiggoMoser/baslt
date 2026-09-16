@@ -7,6 +7,7 @@ YAML form starts with a comment table of the signals found and is written withou
 
 from __future__ import annotations
 
+import glob
 import json
 import math
 import re
@@ -40,16 +41,20 @@ def starter_policy(infos: Sequence[SignalInfo], *, name: str = "run", source_siz
                    require_time: bool = True) -> dict:
     """The starter policy as a plain mapping.
 
-    With `require_time`, signals whose clock could not be found are left out, since loading them would fail; file
+    With `require_time`, signals whose clock could not be found are excluded, since loading them would fail; file
     sources need this, while in-memory `(t, v)` pairs carry their own time and report no shared clock.
     """
     hard: dict[str, dict] = {}
+    untimed: list[str] = []
     for info in infos:
         if require_time and info.time_ref is None:
+            untimed.append(info.name)
             continue
         op = "state_transitions" if info.kind == "discrete" else "global_extrema"
         hard[info.name] = {op: {}}
     policy: dict = {"version": 1, "name": name, "artifact": {"max_size": budget_for(source_size)}}
+    if untimed:
+        policy["signals"] = {"exclude": [glob.escape(signal) for signal in untimed]}
     if hard:
         policy["hard"] = hard
     return policy
@@ -129,8 +134,9 @@ def render_yaml(policy: Mapping, infos: Sequence[SignalInfo], *, source_label: s
     if untimed:
         lines += [
             "#",
-            f"# Left out because no time signal was found: {', '.join(untimed)}.",
-            "# Set signals.time to the name of the clock, or give each one a time under signals.decl.",
+            f"# Excluded because no time signal was found: {', '.join(untimed)}.",
+            "# Set signals.time to the name of the clock, or give each one a time under signals.decl, then remove",
+            "# them from signals.exclude.",
         ]
     lines.append("")
     lines.extend(_yaml(policy, 0))

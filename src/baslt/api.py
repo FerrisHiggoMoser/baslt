@@ -155,6 +155,21 @@ def inspect(source) -> dict:
             "signals": [asdict(info) for info in adapter.list_signals()]}
 
 
+def _skipped_text(adapter) -> str:
+    """Why a source yielded no signals, from the notes its reader keeps about what it skipped."""
+    try:
+        issues = list(adapter.load().meta.issues)
+    except Exception:  # the explanation is best effort; the caller already has its error
+        return ""
+    if not issues:
+        return ""
+    text = ": " + "; ".join(issues)
+    if any("without MATLAB" in issue for issue in issues):
+        text += (". Log Simulink data in the Structure With Time or Array format (To Workspace blocks, "
+                 "Data Import/Export) and save that instead")
+    return text
+
+
 def init_policy(source, *, output=None, force=False, format=None) -> dict:
     """Write (or return) a starter policy for a source's signals.
 
@@ -172,8 +187,15 @@ def init_policy(source, *, output=None, force=False, format=None) -> dict:
     is_file = isinstance(source, (str, Path))
     adapter = open_source(source)
     infos = adapter.list_signals()
+    where = source if is_file else "the in-memory source"
     if not infos:
-        raise SourceError(f"no signals found in {source if is_file else 'the in-memory source'}")
+        raise SourceError(f"no signals found in {where}{_skipped_text(adapter)}")
+    if is_file and all(info.time_ref is None for info in infos):
+        raise SourceError(
+            f"no signal in {where} has a time signal ({', '.join(info.name for info in infos)}); name the clock "
+            "t, time, Time, timestamp or tout next to the signals or in a parent group, or write the policy by hand "
+            "with signals.time naming it"
+        )
     name = Path(source).stem if is_file else "run"
     size = Path(source).stat().st_size if is_file else None
     policy = starter_policy(infos, name=name, source_size=size, require_time=is_file)

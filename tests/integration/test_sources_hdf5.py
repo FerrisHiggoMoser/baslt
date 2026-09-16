@@ -383,3 +383,31 @@ def test_explicit_format_and_corrupt_file(tmp_path, data):
     broken.write_bytes(b"\x89HDF\r\n\x1a\n" + b"\x00" * 64)
     with pytest.raises(SourceError, match="cannot open HDF5 source"):
         open_source(broken).list_signals()
+
+
+def test_a_clock_in_a_parent_group_serves_the_groups_below(tmp_path):
+    t = np.linspace(0.0, 2.0, 21)
+    path = tmp_path / "simout.h5"
+    with h5py.File(path, "w") as f:
+        f["time"] = t
+        f["simout/q_dyn"] = np.sin(t)
+        f["simout/deep/mode"] = (t > 1).astype(np.int32)
+        f["fast/t"] = np.linspace(0.0, 2.0, 41)
+        f["fast/x"] = np.cos(np.linspace(0.0, 2.0, 41))
+        f["fast/inner/y"] = np.zeros(41)
+    infos = {info.name: info.time_ref for info in open_source(path).list_signals()}
+    assert infos == {"simout/q_dyn": "time", "simout/deep/mode": "time", "fast/x": "fast/t",
+                     "fast/inner/y": "fast/t"}  # the nearest clock wins
+    run = open_source(path).load()
+    assert np.array_equal(run.signals["simout/deep/mode"].t, t)
+
+
+def test_an_explicit_global_clock_beats_a_parent_group_clock(tmp_path):
+    t = np.linspace(0.0, 2.0, 21)
+    path = tmp_path / "simout.h5"
+    with h5py.File(path, "w") as f:
+        f["time"] = t
+        f["clock"] = t * 1000.0
+        f["simout/q_dyn"] = np.sin(t)
+    source = open_source(path, global_time="clock")
+    assert {info.name: info.time_ref for info in source.list_signals()}["simout/q_dyn"] == "clock"

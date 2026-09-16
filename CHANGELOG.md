@@ -8,6 +8,9 @@
   signal, and records each signal's reconstruction error; the verifier checks all of it.
 - `baslt explain` suggests the smallest budget that works and, given the source, measures relaxing each requirement.
 - State transitions verify against the source when a value changes between samples sharing a timestamp.
+- A MATLAB v7.3 file saved with an `.h5` name opens as a MAT-file, a clock in a parent HDF5 group serves the groups
+  below it, `policy init` excludes signals without a clock so its policy compiles, and a file holding only MATLAB
+  objects says why nothing was found.
 - Local extrema with prominence and separation, checked independently on the retained samples.
 - Events (falling, rising and equals triggers with windows) and sync groups, with verifier checks.
 - MATLAB MAT-file sources, v5 through scipy and v7.3 through h5py, including Simulink structure-with-time logs.

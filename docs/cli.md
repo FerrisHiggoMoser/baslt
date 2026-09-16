@@ -86,9 +86,10 @@ baslt policy init SOURCE [-o POLICY] [--format yaml|json] [--force]
 Writes a starter policy for the signals in `SOURCE`: global extrema for every continuous or vector signal, state
 transitions for every discrete one, and an artifact budget of a fiftieth of the source (rounded up to a power of two,
 between 256 KiB and 8 MiB). Without `-o` the policy is printed. The YAML form starts with a table of the signals
-found, a hint when signals have no unit (MAT-files never do), and the names of signals left out because no clock was
-found. The format follows the output suffix (`.json` gives JSON) unless `--format` is given. An existing file is only
-replaced with `--force`. The starter policy always compiles as written.
+found, a hint when signals have no unit (MAT-files never do), and the signals excluded (`signals.exclude`) because no
+clock was found. A file in which no signal has a clock is refused with a message saying how to name one. The format
+follows the output suffix (`.json` gives JSON) unless `--format` is given. An existing file is only replaced with
+`--force`. The starter policy always compiles as written.
 
 ## `baslt explain`
 

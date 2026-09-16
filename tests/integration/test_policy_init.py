@@ -54,9 +54,11 @@ def test_operator_choice_and_untimed_signals():
     assert policy["hard"] == {
         "aero/q": {"global_extrema": {}}, "nav/pos": {"global_extrema": {}}, "gnc/mode": {"state_transitions": {}},
     }
+    assert policy["signals"] == {"exclude": ["orphan"]}
     assert "orphan" in starter_policy(infos, require_time=False)["hard"]
+    assert "signals" not in starter_policy(infos, require_time=False)
     text = render_yaml(policy, infos, source_label="run.h5")
-    assert "# Left out because no time signal was found: orphan." in text
+    assert "# Excluded because no time signal was found: orphan." in text
     assert load_policy(text, format="yaml").sha256 == load_policy(policy).sha256
 
 
@@ -154,3 +156,42 @@ def test_command_line(tmp_path):
 
     assert _cli("policy").returncode == 3
     assert _cli("policy", "init", tmp_path / "missing.csv").returncode == 3
+
+
+def test_signals_without_a_clock_are_excluded_so_the_starter_policy_compiles(tmp_path):
+    h5py = pytest.importorskip("h5py")
+    t = np.linspace(0.0, 1.0, 101)
+    path = tmp_path / "mixed.h5"
+    with h5py.File(path, "w") as f:
+        f["aero/time"] = t
+        f["aero/q[1]"] = np.sin(t)
+        f["loose/odd*name"] = np.arange(7.0)  # no clock of its own and none above it
+    result = init_policy(path, output=tmp_path / "mixed.yaml")
+    assert result["policy"]["signals"] == {"exclude": ["loose/odd[*]name"]}
+    compiled = compile(path, tmp_path / "mixed.yaml")
+    assert [entry["name"] for entry in compiled.manifest["budget"]["signals"]] == ["aero/q[1]"]
+
+
+def test_a_source_without_any_clock_is_refused(tmp_path):
+    h5py = pytest.importorskip("h5py")
+    path = tmp_path / "clockless.h5"
+    with h5py.File(path, "w") as f:
+        f["a"] = np.arange(5.0)
+        f["b"] = np.arange(5.0)
+    with pytest.raises(SourceError, match=r"no signal in .* has a time signal \(a, b\)"):
+        init_policy(path)
+
+
+def test_matlab_objects_explain_why_nothing_was_found(tmp_path):
+    pytest.importorskip("h5py")
+    from reference.mat73_layout import Mat73Writer
+
+    path = tmp_path / "simout.h5"
+    with Mat73Writer(path) as w:
+        w.numeric(w.root, "tout", np.arange(5.0))
+        w.object(w.root, "simout", "timeseries")
+    with pytest.raises(SourceError) as caught:
+        init_policy(path)
+    message = str(caught.value)
+    assert "simout: MATLAB timeseries objects cannot be read without MATLAB" in message
+    assert "Structure With Time or Array format" in message
