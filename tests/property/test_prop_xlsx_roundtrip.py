@@ -80,8 +80,10 @@ def test_our_escapes_survive_our_reader(tmp_path, rows):
     assert ours(path) == normalized(rows)
 
 
-# openpyxl writes floats with 16 significant digits, so values near the float maximum would overflow on reading.
-modest = st.one_of(st.none(), plain_text, st.floats(-1e300, 1e300), st.integers(-(2**52), 2**52), st.booleans())
+# openpyxl writes floats with 16 significant digits, so values near the float maximum would overflow on reading,
+# and it saves text starting with "=" as a formula without a cached value.
+modest = st.one_of(st.none(), plain_text.filter(lambda text: not text.startswith("=")), st.floats(-1e300, 1e300),
+                   st.integers(-(2**52), 2**52), st.booleans())
 
 
 @settings_

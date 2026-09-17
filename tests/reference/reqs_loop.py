@@ -149,3 +149,46 @@ def aggregate(fn: str, t, x, active, discrete: bool) -> float:
     if span <= 0:
         return math.sqrt(sum(v * v for v in picked) / len(picked)) if fn == "rms" else sum(picked) / len(picked)
     return math.sqrt(area / span) if fn == "rms" else area / span
+
+
+def upper_limit_check(t, x, active, limit: float, *, strict: bool = False, tolerance: float = 0.0) -> dict:
+    """An upper-limit requirement on a continuous signal, one sample at a time (docs/requirements.md).
+
+    Returns the verdict (fail, pass or not_applicable, before the gap rule), the margin at the worst sample and the
+    violating runs as (start, end, tolerated).
+    """
+    n = len(t)
+    excess = []
+    for i in range(n):
+        v = float(x[i])
+        if not active[i] or not _finite(v):
+            excess.append(math.nan)
+            continue
+        e = v - limit
+        excess.append(5e-324 if strict and e == 0 else e)
+    finite = [e for e in excess if not math.isnan(e)]
+    if not finite:
+        return {"verdict": "not_applicable", "margin": None, "runs": []}
+    worst = max(finite)
+    runs = []
+    i = 0
+    while i < n:
+        if math.isnan(excess[i]) or excess[i] <= 0:
+            i += 1
+            continue
+        first = i
+        while i + 1 < n and not math.isnan(excess[i + 1]) and excess[i + 1] > 0:
+            i += 1
+        last = i
+        start = float(t[first])
+        if first > 0 and not math.isnan(excess[first - 1]):
+            a, b = excess[first - 1], excess[first]
+            start = float(t[first - 1]) + (0.0 - a) / (b - a) * float(t[first] - t[first - 1])
+        end = float(t[last])
+        if last < n - 1 and not math.isnan(excess[last + 1]):
+            a, b = excess[last], excess[last + 1]
+            end = float(t[last]) + (0.0 - a) / (b - a) * float(t[last + 1] - t[last])
+        runs.append((start, end, tolerance > 0 and end - start <= tolerance))
+        i += 1
+    failed = any(not tolerated for _, _, tolerated in runs)
+    return {"verdict": "fail" if failed else "pass", "margin": 0.0 if worst == 5e-324 else -worst, "runs": runs}

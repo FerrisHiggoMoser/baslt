@@ -21,6 +21,9 @@ _LAZY: dict[str, tuple[str, str]] = {
     "CompileResult": ("baslt.api", "CompileResult"),
     "init_policy": ("baslt.api", "init_policy"),
     "explain": ("baslt.advice", "explain"),
+    "check": ("baslt.reqs.api", "check"),
+    "lint_requirements": ("baslt.reqs.api", "lint"),
+    "init_requirements": ("baslt.reqs.api", "init_template"),
 }
 
 __all__ = ["__version__", *_LAZY]

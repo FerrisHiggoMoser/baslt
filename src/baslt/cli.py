@@ -77,10 +77,31 @@ def _build_parser() -> tuple[argparse.ArgumentParser, dict[str, Handler]]:
     lint_parser = requirement_actions.add_parser("lint", help="Report every problem in a requirements table")
     lint_parser.add_argument("requirements")
     lint_parser.add_argument("-m", "--mapping", help="mapping file (.yaml, .json or .xlsx)")
+    lint_parser.add_argument("--source", help="also resolve names against this run")
+    lint_parser.add_argument("--params", help="run parameters table (for Applies to)")
     lint_parser.add_argument("--only", action="append", help="lint only these requirement IDs (glob)")
     _common(lint_parser)
+    check_parser = commands.add_parser("check", help="Check runs against a requirements table")
+    check_parser.add_argument("runs", nargs="+", help="run files, folders or glob patterns")
+    check_parser.add_argument("-r", "--requirements", required=True, help="requirements table (.xlsx or .csv)")
+    check_parser.add_argument("-m", "--mapping", help="mapping file (.yaml, .json or .xlsx)")
+    check_parser.add_argument("--params", help="run parameters table (one row per run)")
+    check_parser.add_argument("-o", "--output", help="output folder")
+    check_parser.add_argument("--jobs", default="1", help="parallel runs: a number or auto")
+    check_parser.add_argument("--resume", action="store_true", help="skip runs whose results are up to date")
+    check_parser.add_argument("--fail-on", choices=("fail", "warn", "none"), default="fail")
+    check_parser.add_argument("--pages", choices=("failed", "all", "none"), help="per-run report pages (batch)")
+    check_parser.add_argument("--only", action="append", help="check only these requirement IDs (glob)")
+    check_parser.add_argument("--no-html", action="store_true", help="do not write HTML reports")
+    check_parser.add_argument("--no-xlsx", action="store_true", help="do not write the results workbook")
+    check_parser.add_argument("--no-annotate", action="store_true", help="do not write the checked copy")
+    check_parser.add_argument("--archive", action="store_true", help="also compile a .baslt artifact per run")
+    check_parser.add_argument("--max-size", help="size budget of --archive artifacts")
+    check_parser.add_argument("--hash", choices=("sampled", "full", "none"), default="sampled")
+    check_parser.add_argument("--all", action="store_true", help="list passing requirements too")
+    _common(check_parser)
     return parser, {"compile": _compile, "verify": _verify, "inspect": _inspect, "policy": _policy,
-                    "explain": _explain, "requirements": _requirements}
+                    "explain": _explain, "requirements": _requirements, "check": _check}
 
 
 def _emit(args, payload, message):
@@ -154,8 +175,28 @@ def _requirements(args):
         written = " and ".join(result["written"])
         _emit(args, result, f"Wrote {written}: {result['rows']} example rows, {result['signals']} signals")
         return 0
-    result = api.lint(args.requirements, mapping=args.mapping, only=args.only)
+    result = api.lint(args.requirements, mapping=args.mapping, source=args.source, params=args.params,
+                      only=args.only)
     _emit(args, result.to_json(), result.render())
+    return result.exit_code
+
+
+def _check(args):
+    from .errors import UsageError
+    from .reqs import api
+
+    jobs = args.jobs
+    if jobs != "auto":
+        try:
+            jobs = int(jobs)
+        except ValueError:
+            raise UsageError(f"--jobs takes a number or auto, got {jobs!r}") from None
+    runs = args.runs[0] if len(args.runs) == 1 else list(args.runs)
+    result = api.check(runs, args.requirements, mapping=args.mapping, params=args.params, output=args.output,
+                       fail_on=args.fail_on, only=args.only, xlsx=not args.no_xlsx, annotate=not args.no_annotate,
+                       html=not args.no_html, pages=args.pages, jobs=jobs, resume=args.resume,
+                       archive=args.archive, max_size=args.max_size, hash=args.hash, show_all=args.all)
+    _emit(args, result.to_json(), result.text)
     return result.exit_code
 
 

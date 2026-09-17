@@ -233,6 +233,8 @@ class RunContext:
             return grid.t
         if op == "sig":
             return self.signals.on(node.value[0], grid)
+        if op == "stack":
+            return np.column_stack([self._num(arg, grid, window) for arg in node.args])
         if op == "param":
             if node.value not in self.params or self.params[node.value] in (None, ""):
                 raise EvalError(f"run parameter {node.value!r} is not given for this run")

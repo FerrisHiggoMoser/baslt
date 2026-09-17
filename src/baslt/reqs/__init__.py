@@ -12,6 +12,7 @@ from __future__ import annotations
 from importlib import import_module
 
 _LAZY = {
+    "check": "baslt.reqs.api",
     "load": "baslt.reqs.api",
     "lint": "baslt.reqs.api",
     "init_template": "baslt.reqs.api",

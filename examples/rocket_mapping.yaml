@@ -1,0 +1,78 @@
+# Requirement check mapping (baslt check -m this-file).
+# requirements: where the requirements are and which rows count (see docs/requirements.md)
+# signals:      aliases for signals in the run, with units, labels for integer modes, and derived signals
+# events:       named events used by after(), before(), between(), time(), at(), count()
+# conditions:   named conditions usable in When columns
+# curves:       limit curves usable as curve(name, argument)
+version: 1
+name: LV-3 ascent requirements
+requirements:
+  where:
+    Status: [approved]
+  passthrough: [Status, Notes]
+time:
+  t0: liftoff
+report:
+  title: LV-3 ascent
+signals:
+  q:
+    path: aero/q
+    unit: Pa
+  alpha:
+    path: aero/alpha
+    unit: deg
+  thrust:
+    path: prop/thrust
+    unit: "N"
+  skin_temp:
+    path: thermal/skin_temp
+    unit: K
+  elevon:
+    path: gnc/elevon_cmd
+    unit: deg
+  mode:
+    path: gnc/mode
+    kind: discrete
+    labels:
+      0: VERTICAL_RISE
+      1: PITCH_PROGRAM
+      2: LOAD_RELIEF
+      3: COAST
+  alt:
+    expr: "`nav/position`.z"
+    unit: m
+  speed:
+    expr: "norm(`nav/velocity`)"
+    unit: m/s
+  load:
+    expr: "norm(deriv(movmean(`nav/velocity`, 200 ms)))"
+    unit: "m/s^2"
+  mach:
+    expr: "speed / 340[m/s]"
+    unit: "1"
+events:
+  liftoff:
+    when: "alt > 1 m"
+    debounce: "100 ms"
+  pitch_start:
+    signal: mode
+    equals: PITCH_PROGRAM
+  MECO:
+    signal: thrust
+    falls_below: "1 MN"
+    debounce: "250 ms"
+conditions:
+  ascent: "between('liftoff', 'MECO')"
+  coast: "after('MECO')"
+  load_relief: "mode == 'LOAD_RELIEF'"
+  high_q: "q > 20 kPa"
+curves:
+  q_max_vs_mach:
+    x_unit: "1"
+    y_unit: kPa
+    x: mach
+    outside: clamp
+    mode: linear
+    points: [[0.0, 72.0], [1.2, 70.0], [3.0, 69.0]]
+units:
+  gee: "9.80665 m/s^2"

@@ -460,6 +460,34 @@ class Binder:
             out.signals.append(name)
         return B("sig", (), (name, alias.name if alias is not None else None), self._signal_type(name, alias))
 
+    def _lookup(self, ref: str, out: BoundExpr, alias=None) -> B:
+        """The signal `ref` names; a vector stored as one column per component (CSV) is put back together."""
+        try:
+            canonical = self.index.lookup(ref)
+        except LookupError:
+            parts = self._components(ref)
+            if parts is None:
+                raise
+            nodes = tuple(self._signal(name, out) for name in parts)
+            unit = alias.unit if alias is not None and alias.unit else nodes[0].type.unit
+            return B("stack", nodes, ref, TypeInfo("series", "num", unit, False, len(nodes)))
+        return self._signal(canonical, out, alias)
+
+    def _components(self, ref: str) -> list[str] | None:
+        """`nav/position_x, _y, _z` (or `_1, _2, ...`) for `nav/position`, when all of them are signals."""
+        base = ref.strip().lstrip("/")
+        names = self.index.infos
+        xyz = [f"{base}{suffix}" for suffix in ("_x", "_y", "_z")]
+        if all(name in names for name in xyz):
+            return xyz
+        for first in (1, 0):
+            numbered = []
+            while f"{base}_{first + len(numbered)}" in names:
+                numbered.append(f"{base}_{first + len(numbered)}")
+            if len(numbered) >= 2:
+                return numbered
+        return None
+
     def _resolve(self, name: str, out: BoundExpr, role: str) -> B:
         config = self.config
         if role == "applies_to":
@@ -472,7 +500,7 @@ class Binder:
         if name in config.conditions:
             return self._condition(name, out, role)
         try:
-            canonical = self.index.lookup(name)
+            return self._lookup(name, out)
         except LookupError as exc:
             message = str(exc)
             if message.startswith("unknown signal"):
@@ -481,7 +509,6 @@ class Binder:
                 hint = f"; did you mean {close[0]!r}?" if close else ""
                 raise self._error(f"unknown name {name!r}{hint}") from None
             raise self._error(message) from None
-        return self._signal(canonical, out)
 
     def _param(self, name: str, out: BoundExpr) -> B:
         if self.param_names is not None and name not in self.param_names:
@@ -494,10 +521,9 @@ class Binder:
     def _alias(self, alias, out: BoundExpr, role: str) -> B:
         if alias.path is not None:
             try:
-                canonical = self.index.lookup(alias.path)
+                return self._lookup(alias.path, out, alias)
             except LookupError as exc:
                 raise self._error(f"alias {alias.name!r}: {exc}") from None
-            return self._signal(canonical, out, alias)
         if alias.name in self._stack:
             chain = " -> ".join([*self._stack[self._stack.index(alias.name):], alias.name])
             raise self._error(f"the definitions refer to each other in a loop: {chain}")
@@ -642,10 +668,9 @@ class Binder:
             if role == "applies_to":
                 raise self._error("applies_to looks at run parameters, not signals")
             try:
-                canonical = self.index.lookup(node.value)
+                return self._lookup(node.value, out)
             except LookupError as exc:
                 raise self._error(str(exc)) from None
-            return self._signal(canonical, out)
         if op == "param":
             return self._param(node.value, out)
         if op in ("neg", "pos"):

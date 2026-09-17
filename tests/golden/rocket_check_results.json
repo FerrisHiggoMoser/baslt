@@ -1,0 +1,344 @@
+{
+  "None": {
+    "LV-001": {
+      "verdict": "pass",
+      "value": 66934.6829,
+      "margin": 3065.31713,
+      "at": 65.328,
+      "reason": null
+    },
+    "LV-002": {
+      "verdict": "pass",
+      "value": 9.76340515,
+      "margin": -2.76340515,
+      "at": 87.895,
+      "reason": null
+    },
+    "LV-003": {
+      "verdict": "pass",
+      "value": 41.3274806,
+      "margin": 17.5124194,
+      "at": 99.988,
+      "reason": null
+    },
+    "LV-004": {
+      "verdict": "pass",
+      "value": 66920.5341,
+      "margin": 2463.58995,
+      "at": 65.781,
+      "reason": null
+    },
+    "LV-005": {
+      "verdict": "pass",
+      "value": 46031.9274,
+      "margin": 6031.92736,
+      "at": null,
+      "reason": null
+    },
+    "LV-006": {
+      "verdict": "pass",
+      "value": 100.119529,
+      "margin": 1.11952929,
+      "at": 100.119529,
+      "reason": null
+    },
+    "LV-007": {
+      "verdict": "pass",
+      "value": 1847.73771,
+      "margin": 47.737712,
+      "at": null,
+      "reason": null
+    },
+    "LV-008": {
+      "verdict": "pass",
+      "value": 35.8355664,
+      "margin": 4.16443356,
+      "at": null,
+      "reason": null
+    },
+    "LV-009": {
+      "verdict": "pass",
+      "value": 0.13305721,
+      "margin": 0.36694279,
+      "at": null,
+      "reason": null
+    },
+    "LV-010": {
+      "verdict": "warn",
+      "value": 355.885526,
+      "margin": 64.1144735,
+      "at": 100.025,
+      "reason": "data gap of 0.351 s inside the checked window"
+    },
+    "LV-011": {
+      "verdict": "pass",
+      "value": -7.41253956,
+      "margin": 12.5874604,
+      "at": 87.901,
+      "reason": null
+    },
+    "LV-012": {
+      "verdict": "pass",
+      "value": null,
+      "margin": null,
+      "at": null,
+      "reason": null
+    },
+    "LV-013": {
+      "verdict": "pass",
+      "value": 2152756.16,
+      "margin": 52756.1585,
+      "at": null,
+      "reason": null
+    },
+    "LV-014": {
+      "verdict": "pass",
+      "value": 6.0,
+      "margin": 1.0,
+      "at": null,
+      "reason": null
+    },
+    "LV-015": {
+      "verdict": "pass",
+      "value": 20.0,
+      "margin": 5.0,
+      "at": null,
+      "reason": null
+    },
+    "LV-016": {
+      "verdict": "pass",
+      "value": 46031.9274,
+      "margin": 6031.92736,
+      "at": null,
+      "reason": null
+    }
+  },
+  "q_spike": {
+    "LV-001": {
+      "verdict": "fail",
+      "value": 72659.6606,
+      "margin": -2659.66055,
+      "at": 62.042,
+      "reason": "limit exceeded 1 time for 0.198 s"
+    },
+    "LV-002": {
+      "verdict": "pass",
+      "value": 9.76340515,
+      "margin": -2.76340515,
+      "at": 87.895,
+      "reason": null
+    },
+    "LV-003": {
+      "verdict": "pass",
+      "value": 41.3274806,
+      "margin": 17.5124194,
+      "at": 99.988,
+      "reason": null
+    },
+    "LV-004": {
+      "verdict": "fail",
+      "value": 72659.6606,
+      "margin": -3146.20412,
+      "at": 62.042,
+      "reason": "limit exceeded 1 time for 0.2 s"
+    },
+    "LV-005": {
+      "verdict": "pass",
+      "value": 46031.9274,
+      "margin": 6031.92736,
+      "at": null,
+      "reason": null
+    },
+    "LV-006": {
+      "verdict": "pass",
+      "value": 100.119529,
+      "margin": 1.11952929,
+      "at": 100.119529,
+      "reason": null
+    },
+    "LV-007": {
+      "verdict": "pass",
+      "value": 1847.73771,
+      "margin": 47.737712,
+      "at": null,
+      "reason": null
+    },
+    "LV-008": {
+      "verdict": "pass",
+      "value": 35.8355664,
+      "margin": 4.16443356,
+      "at": null,
+      "reason": null
+    },
+    "LV-009": {
+      "verdict": "pass",
+      "value": 0.13305721,
+      "margin": 0.36694279,
+      "at": null,
+      "reason": null
+    },
+    "LV-010": {
+      "verdict": "warn",
+      "value": 355.885526,
+      "margin": 64.1144735,
+      "at": 100.025,
+      "reason": "data gap of 0.351 s inside the checked window"
+    },
+    "LV-011": {
+      "verdict": "pass",
+      "value": -7.41253956,
+      "margin": 12.5874604,
+      "at": 87.901,
+      "reason": null
+    },
+    "LV-012": {
+      "verdict": "pass",
+      "value": null,
+      "margin": null,
+      "at": null,
+      "reason": null
+    },
+    "LV-013": {
+      "verdict": "pass",
+      "value": 2152756.16,
+      "margin": 52756.1585,
+      "at": null,
+      "reason": null
+    },
+    "LV-014": {
+      "verdict": "pass",
+      "value": 6.0,
+      "margin": 1.0,
+      "at": null,
+      "reason": null
+    },
+    "LV-015": {
+      "verdict": "pass",
+      "value": 20.0,
+      "margin": 5.0,
+      "at": null,
+      "reason": null
+    },
+    "LV-016": {
+      "verdict": "pass",
+      "value": 46031.9274,
+      "margin": 6031.92736,
+      "at": null,
+      "reason": null
+    }
+  },
+  "alpha_chatter": {
+    "LV-001": {
+      "verdict": "pass",
+      "value": 66934.6829,
+      "margin": 3065.31713,
+      "at": 65.328,
+      "reason": null
+    },
+    "LV-002": {
+      "verdict": "pass",
+      "value": 9.76340515,
+      "margin": -2.76340515,
+      "at": 87.895,
+      "reason": null
+    },
+    "LV-003": {
+      "verdict": "pass",
+      "value": 41.3274806,
+      "margin": 17.5124194,
+      "at": 99.988,
+      "reason": null
+    },
+    "LV-004": {
+      "verdict": "pass",
+      "value": 66920.5341,
+      "margin": 2463.58995,
+      "at": 65.781,
+      "reason": null
+    },
+    "LV-005": {
+      "verdict": "pass",
+      "value": 46031.9274,
+      "margin": 6031.92736,
+      "at": null,
+      "reason": null
+    },
+    "LV-006": {
+      "verdict": "pass",
+      "value": 100.119529,
+      "margin": 1.11952929,
+      "at": 100.119529,
+      "reason": null
+    },
+    "LV-007": {
+      "verdict": "pass",
+      "value": 1847.73771,
+      "margin": 47.737712,
+      "at": null,
+      "reason": null
+    },
+    "LV-008": {
+      "verdict": "pass",
+      "value": 35.8355664,
+      "margin": 4.16443356,
+      "at": null,
+      "reason": null
+    },
+    "LV-009": {
+      "verdict": "fail",
+      "value": 0.885914807,
+      "margin": -0.385914807,
+      "at": null,
+      "reason": "0.885915 is above 0.5"
+    },
+    "LV-010": {
+      "verdict": "warn",
+      "value": 355.885526,
+      "margin": 64.1144735,
+      "at": 100.025,
+      "reason": "data gap of 0.351 s inside the checked window"
+    },
+    "LV-011": {
+      "verdict": "pass",
+      "value": -7.41253956,
+      "margin": 12.5874604,
+      "at": 87.901,
+      "reason": null
+    },
+    "LV-012": {
+      "verdict": "pass",
+      "value": null,
+      "margin": null,
+      "at": null,
+      "reason": null
+    },
+    "LV-013": {
+      "verdict": "pass",
+      "value": 2152756.16,
+      "margin": 52756.1585,
+      "at": null,
+      "reason": null
+    },
+    "LV-014": {
+      "verdict": "pass",
+      "value": 6.0,
+      "margin": 1.0,
+      "at": null,
+      "reason": null
+    },
+    "LV-015": {
+      "verdict": "pass",
+      "value": 20.0,
+      "margin": 5.0,
+      "at": null,
+      "reason": null
+    },
+    "LV-016": {
+      "verdict": "pass",
+      "value": 46031.9274,
+      "margin": 6031.92736,
+      "at": null,
+      "reason": null
+    }
+  }
+}
