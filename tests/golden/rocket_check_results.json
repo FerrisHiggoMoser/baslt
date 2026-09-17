@@ -32,7 +32,7 @@
       "verdict": "pass",
       "value": 46031.9274,
       "margin": 6031.92736,
-      "at": null,
+      "at": 120.0,
       "reason": null
     },
     "LV-006": {
@@ -46,7 +46,7 @@
       "verdict": "pass",
       "value": 1847.73771,
       "margin": 47.737712,
-      "at": null,
+      "at": 100.119529,
       "reason": null
     },
     "LV-008": {
@@ -109,7 +109,7 @@
       "verdict": "pass",
       "value": 46031.9274,
       "margin": 6031.92736,
-      "at": null,
+      "at": 120.0,
       "reason": null
     }
   },
@@ -146,7 +146,7 @@
       "verdict": "pass",
       "value": 46031.9274,
       "margin": 6031.92736,
-      "at": null,
+      "at": 120.0,
       "reason": null
     },
     "LV-006": {
@@ -160,7 +160,7 @@
       "verdict": "pass",
       "value": 1847.73771,
       "margin": 47.737712,
-      "at": null,
+      "at": 100.119529,
       "reason": null
     },
     "LV-008": {
@@ -223,7 +223,7 @@
       "verdict": "pass",
       "value": 46031.9274,
       "margin": 6031.92736,
-      "at": null,
+      "at": 120.0,
       "reason": null
     }
   },
@@ -260,7 +260,7 @@
       "verdict": "pass",
       "value": 46031.9274,
       "margin": 6031.92736,
-      "at": null,
+      "at": 120.0,
       "reason": null
     },
     "LV-006": {
@@ -274,7 +274,7 @@
       "verdict": "pass",
       "value": 1847.73771,
       "margin": 47.737712,
-      "at": null,
+      "at": 100.119529,
       "reason": null
     },
     "LV-008": {
@@ -337,7 +337,7 @@
       "verdict": "pass",
       "value": 46031.9274,
       "margin": 6031.92736,
-      "at": null,
+      "at": 120.0,
       "reason": null
     }
   }

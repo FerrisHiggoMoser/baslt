@@ -147,6 +147,10 @@ def _check_single(source, reqset: RequirementSet, *, params, output, fail_on, xl
             outputs["annotated"] = path
             for note in notes:
                 run.issues.append(Issue(path="annotate", message=note, location=name))
+        if html:
+            from .report import write_run_report
+
+            outputs["report"] = write_run_report(folder / "report.html", run, ctx, reqset)
     code = _exit_code([run], fail_on)
     status = run.status
     result = CheckResult(status=status, exit_code=code, outputs=outputs, runs=[run], counts=run.counts())

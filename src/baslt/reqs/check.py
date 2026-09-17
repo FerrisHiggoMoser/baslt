@@ -112,15 +112,49 @@ def _clean(value):
 
 @dataclass
 class Trace:
-    """Everything the report needs to draw a series check."""
+    """What the report draws for one requirement.
+
+    `x` holds the checked values of a limit check; other checks name a `subject` node (the signal inside the check)
+    that the report evaluates on `grid`. `lines` are horizontal lines in the subject's unit, `spans` the times a
+    duration's condition held and `band` the allowed time range of an event.
+    """
 
     grid: object
-    x: np.ndarray
-    upper: np.ndarray | None
-    lower: np.ndarray | None
-    claims: np.ndarray
-    windows: list[tuple[float, float]]
-    discrete: bool
+    x: np.ndarray | None = None
+    upper: np.ndarray | None = None
+    lower: np.ndarray | None = None
+    claims: np.ndarray | None = None
+    windows: list[tuple[float, float]] = field(default_factory=list)
+    discrete: bool = False
+    subject: object = None
+    lines: list[tuple[str, float]] = field(default_factory=list)
+    spans: list[tuple[float, float]] = field(default_factory=list)
+    marker: tuple[float, float] | None = None
+    band: tuple[float | None, float | None] | None = None
+
+
+PLAIN = ("alias", "unit", "cond")
+SAME_UNIT_AGGREGATES = ("max", "min", "initial", "final", "mean", "rms")
+
+
+def subject_of(node):
+    """The first signal-valued node inside `node` (what a plot of this check shows), or None."""
+    if node is None:
+        return None
+    if node.type.series and node.type.dtype in ("num", "enum") and node.op != "tvar":
+        return node
+    for arg in node.args:
+        if hasattr(arg, "op"):
+            found = subject_of(arg)
+            if found is not None:
+                return found
+    return None
+
+
+def _unwrap(node):
+    while node.op in PLAIN and node.args:
+        node = node.args[0]
+    return node
 
 
 # ------------------------------------------------------------------------------------------------------------
@@ -384,7 +418,8 @@ def _series(breq: BoundRequirement, ctx: RunContext, result: RequirementResult, 
         outcome.na.append(reason)
         for k in usable:
             result.cases[k].verdict, result.cases[k].reason = "not_applicable", reason
-        result.trace = Trace(grid, None if x is None else x, None, None, claims, _intervals(t, claimed), discrete)
+        result.trace = Trace(grid, x, None, None, claims, _intervals(t, claimed), discrete,
+                             subject=subject_of(root) if is_assert else root)
         return
 
     all_runs_list: list[dict] = []
@@ -516,8 +551,8 @@ def _series(breq: BoundRequirement, ctx: RunContext, result: RequirementResult, 
             else:
                 result.notes.append(message)
     windows = _intervals(t, claimed)
-    result.trace = Trace(grid, None if x is None else x, None if is_assert else upper,
-                         None if is_assert else lower, claims, windows, discrete)
+    result.trace = Trace(grid, x, upper, lower, claims, windows, discrete,
+                         subject=subject_of(root) if is_assert else root)
 
 
 def _limit_text(limit: BoundLimit, side: int) -> str:
@@ -604,6 +639,7 @@ def _window(case: BoundCase, ctx: RunContext, grid) -> Tri | None:
 def _single(breq: BoundRequirement, ctx: RunContext, result: RequirementResult, outcome: _Outcome) -> None:
     names = breq.grid_names()
     grid = _grid(breq, ctx) if names else None
+    traces: dict[int, Trace] = {}
     for k, case in enumerate(breq.cases):
         record = result.cases[k]
         applies, problem = _applies(case, ctx)
@@ -616,10 +652,12 @@ def _single(breq: BoundRequirement, ctx: RunContext, result: RequirementResult, 
             record.verdict, record.reason = "not_applicable", "Applies to does not match this run"
             continue
         window = _window(case, ctx, grid)
+        trace = traces[k] = Trace(grid, discrete=bool(grid is not None and grid.discrete))
         if window is not None:
             record.active_time = measure(grid.t, window.active(), discrete=grid.discrete)
+            trace.windows = _intervals(grid.t, window.active())
         if breq.kind == "duration":
-            value, runs = _duration(breq, ctx, grid, window)
+            value, runs = _duration(breq, ctx, grid, window, trace)
             record.runs = runs["count"]
             result.totals.update(runs)
         else:
@@ -641,11 +679,46 @@ def _single(breq: BoundRequirement, ctx: RunContext, result: RequirementResult, 
                                                                 case.margin_abs, case.margin_rel)
         record.verdict, record.reason = verdict, reason
         record.value, record.limit, record.margin, record.margin_pct = value, bound, margin, fraction
+        if breq.kind != "duration" and grid is not None:
+            _value_trace(breq, ctx, trace, window, value, lower, upper, record)
         if verdict == "fail":
             outcome.fail.append(reason)
         elif verdict == "warn":
             outcome.warn.append(reason)
     _summarize_cases(result, outcome, breq)
+    chosen = next((k for k, c in enumerate(result.cases) if c is not None and result.case is not None
+                   and c.label == result.case), None)
+    if chosen is None:
+        chosen = next(iter(traces), None)
+    if chosen is not None:
+        result.trace = traces[chosen]
+
+
+def _value_trace(breq, ctx: RunContext, trace: Trace, window, value, lower, upper, record: CaseResult) -> None:
+    """Horizontal lines and a marker for a single number that is read from a signal."""
+    root = _unwrap(breq.check.root)
+    trace.subject = subject_of(root)
+    if trace.subject is None or isinstance(value, str):
+        return
+    same_unit = trace.subject.type.unit == root.type.unit
+    if root.op == "agg" and root.value in SAME_UNIT_AGGREGATES and same_unit:
+        trace.lines = [("value", value)]
+        if root.value in ("max", "min", "initial", "final"):
+            when = ctx.aggregate_time(root, trace.grid, window)
+            if when is not None:
+                trace.marker = (when, value)
+                record.at = when
+    elif root.op == "at" and same_unit:
+        trace.lines = [("value", value)]
+        times = ctx.event_times(root.value)
+        if times.shape[0]:
+            trace.marker = (float(times[0]), value)
+            record.at = float(times[0])
+    else:
+        return
+    for side, number in (("lower", lower), ("upper", upper)):
+        if number is not None and not isinstance(number, str):
+            trace.lines.append((side, float(number)))
 
 
 def _scalar_value_or_text(side, ctx, grid, window):
@@ -663,16 +736,27 @@ def _compare_text(value: str, limit: BoundLimit, target) -> tuple:
             f"{target!r}", None, None, None)
 
 
-def _duration(breq: BoundRequirement, ctx: RunContext, grid, window: Tri | None) -> tuple[float, dict]:
+def _duration(breq: BoundRequirement, ctx: RunContext, grid, window: Tri | None,
+              trace: Trace | None = None) -> tuple[float, dict]:
     """Total time the check's condition holds inside the window, with exact crossing times for comparisons."""
-    root = breq.check.root
+    root = _unwrap(breq.check.root)
     t = grid.t
     active = np.ones(grid.n, dtype=bool) if window is None else window.active()
     discrete = grid.discrete
+    if trace is not None:
+        trace.subject = subject_of(root)
     if root.op == "cmp" and root.value in ("<", "<=", ">", ">=") and root.args[0].type.dtype == "num" \
             and root.args[1].type.dtype == "num" and not discrete:
         left = ctx.series(root.args[0], grid)
         right = ctx.series(root.args[1], grid)
+        if trace is not None and root.args[0].type.series:
+            trace.subject = root.args[0]
+            if not root.args[1].type.series:
+                trace.lines = [("threshold", float(right[0]))] if right.shape[0] else []
+            elif root.value in ("<", "<="):
+                trace.lower = np.asarray(right, dtype=np.float64)
+            else:
+                trace.upper = np.asarray(right, dtype=np.float64)
         with np.errstate(invalid="ignore"):
             e = left - right if root.value in (">", ">=") else right - left
             if root.value in (">=", "<="):
@@ -686,6 +770,8 @@ def _duration(breq: BoundRequirement, ctx: RunContext, grid, window: Tri | None)
         return 0.0, {"count": 0, "longest": 0.0, "total": 0.0}
     start, end = _run_bounds(runs, t, discrete)
     durations = end - start
+    if trace is not None:
+        trace.spans = [(float(a), float(b)) for a, b in zip(start[:EVIDENCE_LIMIT], end[:EVIDENCE_LIMIT])]
     total = float(np.sum(durations))
     return total, {"count": runs.count, "longest": float(durations.max()), "total": total}
 
@@ -700,6 +786,7 @@ def _event(breq: BoundRequirement, ctx: RunContext, result: RequirementResult, o
     result.totals.update({"count": event.count, "times": [float(v) for v in times[:EVIDENCE_LIMIT]],
                           "pending_at_end": event.pending})
     chosen = event.selected(occurrence)
+    result.trace = _event_trace(ctx, name)
     for k, case in enumerate(breq.cases):
         record = result.cases[k]
         applies, problem = _applies(case, ctx)
@@ -727,6 +814,8 @@ def _event(breq: BoundRequirement, ctx: RunContext, result: RequirementResult, o
                 limit_verdict, reason, bound, margin, fraction = _compare(record.value, case.limit, lower, upper,
                                                                           case.margin_abs, case.margin_rel)
                 record.limit, record.margin, record.margin_pct = bound, margin, fraction
+                if result.trace is not None and result.trace.band is None:
+                    result.trace.band = (lower, upper)
                 if limit_verdict == "fail":
                     reasons.append(f"{name} at {reason}")
                     verdict = "fail"
@@ -746,6 +835,23 @@ def _event(breq: BoundRequirement, ctx: RunContext, result: RequirementResult, o
         elif verdict == "warn":
             outcome.warn.extend(reasons)
     _summarize_cases(result, outcome, breq)
+
+
+def _event_trace(ctx: RunContext, name: str) -> Trace | None:
+    """The signal an event is detected on, to plot with the event's times."""
+    defn = ctx.config.events.get(name)
+    text = None if defn is None else (defn.signal if defn.condition is not None else defn.when)
+    if text is None:
+        return None
+    try:
+        bound = ctx.bind(text)
+        subject = subject_of(bound.root)
+        if subject is None:
+            return None
+        grid = ctx.grid_for(bound.signals)
+    except (EvalError, ExprError, UnitsError, LookupError):
+        return None
+    return Trace(grid, discrete=grid.discrete or subject.type.discrete, subject=subject)
 
 
 def _summarize_cases(result: RequirementResult, outcome: _Outcome, breq: BoundRequirement) -> None:

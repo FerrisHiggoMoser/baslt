@@ -66,7 +66,7 @@ def test_evidence_sentences(run):
     assert evidence_text(by_id["A-1"], run.t0) == \
         "worst 5 m, at T+4.500 s, limit <= 4 m, margin -1 m (-25.0 %), (limit exceeded 1 time for 2 s)"
     assert evidence_text(by_id["A-2"], run.t0) == \
-        "value 5 m, limit <= 5.2 m, margin 0.2 m (3.8 %), (5 is within the warning margin of 5.2)"
+        "value 5 m, at T+4.500 s, limit <= 5.2 m, margin 0.2 m (3.8 %), (5 is within the warning margin of 5.2)"
     assert evidence_text(by_id["A-3"], run.t0).startswith("not checked: unknown name 'nope'")
     assert evidence_text(by_id["A-4"], run.t0) == "the condition never holds"
     assert evidence_text(by_id["A-5"], None) == "worst 5 m, at 5.000 s, limit <= 10 m, margin 5 m (50.0 %)"

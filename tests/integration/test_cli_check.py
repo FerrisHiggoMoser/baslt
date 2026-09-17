@@ -70,10 +70,13 @@ def test_outputs_and_the_terminal_table(files, capsys):
     assert main(["check", str(run), "-r", str(table)]) == 1
     text = capsys.readouterr().out
     out = folder / "run.check"
-    assert sorted(p.name for p in out.iterdir()) == ["reqs.checked.csv", "results.csv", "results.json",
-                                                    "results.xlsx"]
+    assert sorted(p.name for p in out.iterdir()) == ["report.html", "reqs.checked.csv", "results.csv",
+                                                    "results.json", "results.xlsx"]
     assert text.splitlines()[0] == "Run      run.csv   csv, 10.0 s, 1 signals"
-    assert f"Output   {out}" in text and "results.xlsx, reqs.checked.csv, results.json, results.csv" in text
+    assert f"Output   {out}" in text
+    assert "report.html, results.xlsx, reqs.checked.csv, results.json, results.csv" in text
+    page = (out / "report.html").read_text(encoding="utf-8")
+    assert '<details class="card v-fail" id="req-F"' in page and 'id="req-E"' in page
     lines = [line for line in text.splitlines() if line[:4] in ("FAIL", "ERRO", "WARN", "N/A ")]
     assert [line.split()[1] for line in lines] == ["F", "E", "W", "N"]
     assert "PASS" not in text
@@ -87,7 +90,7 @@ def test_outputs_and_the_terminal_table(files, capsys):
 def test_json_output(files, capsys):
     run, folder = files
     code = main(["check", str(run), "-r", str(reqs(folder, "pass", "fail")), "-o", str(folder / "o"), "--json",
-                 "--hash", "none", "--no-xlsx"])
+                 "--hash", "none", "--no-xlsx", "--no-html"])
     assert code == 1
     payload = json.loads(capsys.readouterr().out)
     assert payload["status"] == "fail" and payload["exit_code"] == 1

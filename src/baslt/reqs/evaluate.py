@@ -509,6 +509,27 @@ class RunContext:
 
         return float(reconstruct_linear(t, values, np.array([tau]))[0])
 
+    def aggregate_time(self, node: B, grid: Grid | None, window: Tri | None) -> float | None:
+        """The time of the sample a max, min, initial or final aggregate took its value from."""
+        fn = node.value
+        inner = node.args[0]
+        if grid is None:
+            grid = self.grid_for(_signals_of(inner))
+        active = np.ones(grid.n, dtype=bool) if window is None else window.broadcast(grid.n).active()
+        x = np.asarray(self.series(inner, grid), dtype=np.float64)
+        if x.ndim != 1:
+            return None
+        ok = active & np.isfinite(x)
+        if not ok.any():
+            return None
+        if fn in ("max", "min"):
+            picked = np.where(ok, x, -np.inf if fn == "max" else np.inf)
+            index = int(np.argmax(picked) if fn == "max" else np.argmin(picked))
+        else:
+            hits = np.flatnonzero(ok)
+            index = int(hits[0] if fn == "initial" else hits[-1])
+        return float(grid.t[index])
+
     def _aggregate(self, node: B, grid: Grid | None, window: Tri | None) -> float:
         fn = node.value
         inner = node.args[0]

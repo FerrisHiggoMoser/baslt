@@ -170,6 +170,9 @@ def evidence_text(result: RequirementResult, t0: float | None) -> str:
         pieces.append(f"limit {result.limit}")
     if result.margin is not None:
         pieces.append(f"margin {_margin_text(result)}")
+    if result.kind == "assert" and result.verdict == "pass":
+        checked = result.totals.get("active_time")
+        pieces.append("the condition held" + (f" for all {checked:.4g} s checked" if checked else ""))
     if result.reason and result.verdict != "pass":
         pieces.append(f"({result.reason})")
     elif result.verdict == "pass" and result.totals.get("tolerated"):
