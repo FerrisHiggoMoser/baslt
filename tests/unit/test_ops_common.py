@@ -57,3 +57,12 @@ def test_json_helpers():
     comps = list(components(np.zeros((4, 3))))
     assert [k for k, _ in comps] == [0, 1, 2] and comps[0][1].shape == (4,)
     assert [k for k, _ in components(np.zeros(4))] == [0]
+
+
+def test_run_starts():
+    from baslt.ops._common import run_starts
+
+    assert run_starts(np.array([], dtype=bool)).tolist() == []
+    assert run_starts(np.array([True, True, False, True, False, True])).tolist() == [0, 3, 5]
+    assert run_starts(np.array([0, 2, 2, 0]) == 2).tolist() == [1]
+    assert run_starts(np.zeros(4, dtype=bool)).tolist() == []

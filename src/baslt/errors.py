@@ -57,6 +57,10 @@ class PolicyError(BasltError):
         super().__init__("\n".join(issue.render() for issue in self.issues))
 
 
+class RequirementsError(PolicyError):
+    """A requirements table or its mapping could not be read or validated. Issues carry sheet and cell locations."""
+
+
 class SourceError(BasltError):
     """The simulation source could not be read or is malformed."""
 

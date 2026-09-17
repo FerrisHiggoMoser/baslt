@@ -58,7 +58,15 @@ from ..ops import (
     violation,
     window_extrema,
 )
-from ..ops._common import STATUS_NOT_APPLICABLE, STATUS_PASS, STATUS_WARN, capped, extent_samples, gap_samples
+from ..ops._common import (
+    STATUS_NOT_APPLICABLE,
+    STATUS_PASS,
+    STATUS_WARN,
+    capped,
+    extent_samples,
+    gap_samples,
+    run_starts,
+)
 from ..sampleset import SampleSet
 
 if TYPE_CHECKING:
@@ -477,9 +485,7 @@ def _evaluate_event(event: BoundEvent, plans: dict[str, SignalPlan]) -> EventRes
         if sig.kind != "discrete":
             raise _event_issue(event, f"equals needs a discrete signal, but {sig.name!r} is {sig.kind}")
         code = _equals_code(event, sig)
-        hit = sig.v == code
-        previous = np.concatenate(([False], hit[:-1])) if hit.size else hit
-        starts = np.flatnonzero(hit & ~previous)
+        starts = run_starts(sig.v == code)
         samples = SampleSet.from_points(np.concatenate([starts, starts[starts > 0] - 1]), bit)
         triggers = [
             {"t": float(sig.t[s]), "index_before": s - 1 if s > 0 else None, "index_after": s,

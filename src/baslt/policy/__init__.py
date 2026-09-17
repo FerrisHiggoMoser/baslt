@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .bind import bind_policy
+from .bind import SignalIndex, UnresolvedSignal, bind_policy
 from .canonical import canonical_dict, canonical_json, canonical_sha256
 from .parse import load_policy
 from .schema import (
@@ -42,10 +42,12 @@ __all__ = [
     "Policy",
     "ReviewSpec",
     "SignalDecl",
+    "SignalIndex",
     "SignalsSpec",
     "SoftRule",
     "SyncGroupSpec",
     "TrajectorySpec",
+    "UnresolvedSignal",
     "bind_policy",
     "canonical_dict",
     "canonical_json",

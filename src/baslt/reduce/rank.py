@@ -23,10 +23,27 @@ import numpy as np
 from ..ops._common import finite_mask, gap_samples
 
 
+def minmax_bins(values: np.ndarray, finite: np.ndarray, bins: int) -> tuple[np.ndarray, ...]:
+    """Per-bin (min, argmin, max, argmax) of a 1-D array split into min(bins, n) equal-count bins.
+
+    Ties go to the lowest index. A bin without finite samples has min +inf, max -inf and both indices n.
+    """
+    n = int(values.shape[0])
+    count = min(int(bins), n)
+    if count <= 0:
+        empty = np.empty(0, dtype=np.float64)
+        none = np.empty(0, dtype=np.int64)
+        return empty, none, empty.copy(), none.copy()
+    return _equal_bins(np.asarray(values, dtype=np.float64), np.asarray(finite, dtype=bool), count)
+
+
 def _finest_bins(values: np.ndarray, finite: np.ndarray, levels: int) -> tuple[np.ndarray, ...]:
     """Per-bin (min, argmin, max, argmax) of one component at 2**levels equal-count bins."""
+    return _equal_bins(values, finite, 1 << levels)
+
+
+def _equal_bins(values: np.ndarray, finite: np.ndarray, bins: int) -> tuple[np.ndarray, ...]:
     n = values.shape[0]
-    bins = 1 << levels
     edges = (np.arange(bins + 1, dtype=np.int64) * n) // bins
     starts = edges[:-1]
     sizes = np.diff(edges)

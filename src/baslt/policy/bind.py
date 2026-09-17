@@ -33,8 +33,57 @@ if TYPE_CHECKING:
     from ..signals import SignalInfo
 
 
-class _Unresolved(Exception):
-    pass
+class UnresolvedSignal(LookupError):
+    """A signal reference that names no signal, or more than one. The message says which and suggests a fix."""
+
+
+class SignalIndex:
+    """Resolve signal references to canonical names: exact name, source path, or a leaf name unique in the source.
+
+    `aliases` maps alias names to canonical names (None for an alias whose target did not resolve); aliases are
+    only offered as suggestions here, since callers resolve them before calling `lookup`.
+    """
+
+    def __init__(self, infos: Sequence[SignalInfo], aliases: dict[str, str | None] | None = None) -> None:
+        self.infos: dict[str, SignalInfo] = {}
+        for info in infos:
+            self.infos.setdefault(info.name, info)
+        self.by_path: dict[str, str] = {}
+        self.leaves: dict[str, list[str]] = {}
+        for name, info in self.infos.items():
+            stripped = info.path.lstrip("/")
+            if stripped not in self.infos:
+                self.by_path.setdefault(stripped, name)
+            self.leaves.setdefault(name.rsplit("/", 1)[-1], []).append(name)
+        self.aliases: dict[str, str | None] = aliases if aliases is not None else {}
+
+    def lookup(self, ref: str) -> str:
+        """The canonical name `ref` refers to; raises UnresolvedSignal."""
+        if ref in self.infos:
+            return ref
+        stripped = ref.lstrip("/")
+        if stripped in self.infos:
+            return stripped
+        if stripped in self.by_path:
+            return self.by_path[stripped]
+        if "/" not in stripped:
+            candidates = self.leaves.get(stripped, [])
+            if len(candidates) == 1:
+                return candidates[0]
+            if len(candidates) > 1:
+                raise UnresolvedSignal(
+                    f"ambiguous signal {ref!r}; it matches {', '.join(sorted(candidates))}. "
+                    "Use the full name or declare an alias in signals.decl"
+                )
+        close = difflib.get_close_matches(ref, self.candidates(), n=1, cutoff=0.6)
+        if close:
+            raise UnresolvedSignal(f"unknown signal {ref!r}; did you mean {close[0]!r}?")
+        raise UnresolvedSignal(f"unknown signal {ref!r}")
+
+    def candidates(self) -> list[str]:
+        """Every name a reference may use: aliases, canonical names and unique leaf names."""
+        unique = [leaf for leaf, names in self.leaves.items() if len(names) == 1]
+        return list(dict.fromkeys([*self.aliases, *self.infos, *unique]))
 
 
 def _kinds_text(kinds: Sequence[str]) -> str:
@@ -53,17 +102,10 @@ class _Binder:
     def __init__(self, policy: Policy, infos: Sequence[SignalInfo]) -> None:
         self.policy = policy
         self.issues = IssueCollector(policy.locations)
-        self.infos: dict[str, SignalInfo] = {}
-        for info in infos:
-            self.infos.setdefault(info.name, info)
-        self.by_path: dict[str, str] = {}
-        self.leaves: dict[str, list[str]] = {}
-        for name, info in self.infos.items():
-            stripped = info.path.lstrip("/")
-            if stripped not in self.infos:
-                self.by_path.setdefault(stripped, name)
-            self.leaves.setdefault(name.rsplit("/", 1)[-1], []).append(name)
-        self.alias_map: dict[str, str | None] = {}
+        self.index = SignalIndex(infos)
+        self.infos = self.index.infos
+        self.leaves = self.index.leaves
+        self.alias_map = self.index.aliases
         self.units: dict[str, str | None] = {n: i.unit for n, i in self.infos.items()}
         self.kinds: dict[str, str] = {n: i.kind for n, i in self.infos.items()}
         self.time_refs: dict[str, str | None] = {n: i.time_ref for n, i in self.infos.items()}
@@ -74,27 +116,7 @@ class _Binder:
     # ----- names ------------------------------------------------------------------------
 
     def lookup(self, ref: str) -> str:
-        if ref in self.infos:
-            return ref
-        stripped = ref.lstrip("/")
-        if stripped in self.infos:
-            return stripped
-        if stripped in self.by_path:
-            return self.by_path[stripped]
-        if "/" not in stripped:
-            candidates = self.leaves.get(stripped, [])
-            if len(candidates) == 1:
-                return candidates[0]
-            if len(candidates) > 1:
-                raise _Unresolved(
-                    f"ambiguous signal {ref!r}; it matches {', '.join(sorted(candidates))}. "
-                    "Use the full name or declare an alias in signals.decl"
-                )
-        pool = list(self.alias_map) + list(self.infos) + [leaf for leaf, c in self.leaves.items() if len(c) == 1]
-        close = difflib.get_close_matches(ref, list(dict.fromkeys(pool)), n=1, cutoff=0.6)
-        if close:
-            raise _Unresolved(f"unknown signal {ref!r}; did you mean {close[0]!r}?")
-        raise _Unresolved(f"unknown signal {ref!r}")
+        return self.index.lookup(ref)
 
     def resolve(self, ref: str, path: str) -> str | None:
         """Canonical name of a reference; each failing reference is reported once, at its first use."""
@@ -104,7 +126,7 @@ class _Binder:
             return None
         try:
             return self.lookup(ref)
-        except _Unresolved as exc:
+        except UnresolvedSignal as exc:
             self.failed.add(ref)
             self.issues.add(path, str(exc))
             return None
@@ -128,7 +150,7 @@ class _Binder:
             return self.alias_map[ref]  # type: ignore[return-value]
         try:
             return self.lookup(ref)
-        except _Unresolved:
+        except UnresolvedSignal:
             return ref.lstrip("/")
 
     # ----- declarations -----------------------------------------------------------------
@@ -140,7 +162,7 @@ class _Binder:
             target = decl.path if decl.path is not None else alias
             try:
                 canonical = self.lookup(target)
-            except _Unresolved as exc:
+            except UnresolvedSignal as exc:
                 self.issues.add(join_path(path, "path") if decl.path is not None else path, str(exc))
                 self.alias_map[alias] = None
                 continue

@@ -107,3 +107,30 @@ def test_bit_reversed_order_refines_evenly():
 def test_the_order_is_deterministic():
     v = signals()["noisy"]
     assert preview_order(v, 50).tolist() == preview_order(v.copy(), 50).tolist()
+
+
+def test_minmax_bins_keep_every_bin_extreme():
+    from baslt.reduce.rank import minmax_bins
+
+    v = RNG.normal(size=1000)
+    v[100:130] = np.nan
+    finite = np.isfinite(v)
+    bmin, amin, bmax, amax = minmax_bins(v, finite, 7)
+    edges = (np.arange(8) * 1000) // 7
+    for k in range(7):
+        chunk = v[edges[k]:edges[k + 1]]
+        assert bmin[k] == np.nanmin(chunk) and bmax[k] == np.nanmax(chunk)
+        assert v[amin[k]] == bmin[k] and v[amax[k]] == bmax[k]
+    assert np.nanmax(v) == bmax.max() and np.nanmin(v) == bmin.min()
+
+
+def test_minmax_bins_small_empty_and_all_nan():
+    from baslt.reduce.rank import minmax_bins
+
+    v = np.array([3.0, 1.0, 2.0])
+    bmin, amin, bmax, amax = minmax_bins(v, np.isfinite(v), 512)
+    assert bmin.tolist() == [3.0, 1.0, 2.0] and amin.tolist() == [0, 1, 2]
+    assert all(len(part) == 0 for part in minmax_bins(np.zeros(0), np.zeros(0, dtype=bool), 8))
+    nan = np.full(4, np.nan)
+    bmin, amin, bmax, amax = minmax_bins(nan, np.isfinite(nan), 2)
+    assert bmin.tolist() == [np.inf, np.inf] and amax.tolist() == [4, 4]

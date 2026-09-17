@@ -42,6 +42,17 @@ class OpResult:
     raw: object | None = None  # operator-specific cache reused by closure repair
 
 
+def run_starts(hit: np.ndarray) -> np.ndarray:
+    """Index of the first sample of every run of True values in a 1-D boolean array."""
+    import numpy as np
+
+    hit = np.asarray(hit, dtype=bool)
+    if hit.size == 0:
+        return np.empty(0, dtype=np.int64)
+    previous = np.concatenate(([False], hit[:-1]))
+    return np.flatnonzero(hit & ~previous)
+
+
 def finite_mask(v: np.ndarray) -> np.ndarray:
     """True where every component of the sample is finite. Integer and bool values are always finite."""
     import numpy as np
