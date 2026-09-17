@@ -63,8 +63,24 @@ def _build_parser() -> tuple[argparse.ArgumentParser, dict[str, Handler]]:
     explain_parser.add_argument("--policy", help="the policy the report was compiled with")
     explain_parser.add_argument("--max-size", help="budget to measure against instead of the policy's")
     _common(explain_parser)
+    requirements_parser = commands.add_parser("requirements", help="Work with requirement tables")
+    requirement_actions = requirements_parser.add_subparsers(dest="requirements_action", metavar="ACTION",
+                                                             required=True)
+    template_parser = requirement_actions.add_parser("init", help="Write a starter requirements workbook")
+    template_parser.add_argument("-o", "--output", default="requirements.xlsx",
+                                 help="requirements file to write (.xlsx or .csv)")
+    template_parser.add_argument("--template", choices=("generic", "polarion"), default="generic")
+    template_parser.add_argument("--mapping-output", help="also write the mapping as a .yaml or .json file")
+    template_parser.add_argument("--source", help="list this run's signals in the Signals sheet")
+    template_parser.add_argument("--force", action="store_true", help="replace existing files")
+    _common(template_parser)
+    lint_parser = requirement_actions.add_parser("lint", help="Report every problem in a requirements table")
+    lint_parser.add_argument("requirements")
+    lint_parser.add_argument("-m", "--mapping", help="mapping file (.yaml, .json or .xlsx)")
+    lint_parser.add_argument("--only", action="append", help="lint only these requirement IDs (glob)")
+    _common(lint_parser)
     return parser, {"compile": _compile, "verify": _verify, "inspect": _inspect, "policy": _policy,
-                    "explain": _explain}
+                    "explain": _explain, "requirements": _requirements}
 
 
 def _emit(args, payload, message):
@@ -127,6 +143,20 @@ def _explain(args):
     result = explain(args.report, source=args.source, policy=args.policy, max_size=args.max_size)
     _emit(args, result, render(result))
     return 0
+
+
+def _requirements(args):
+    from .reqs import api
+
+    if args.requirements_action == "init":
+        result = api.init_template(args.output, template=args.template, mapping_output=args.mapping_output,
+                                   source=args.source, force=args.force)
+        written = " and ".join(result["written"])
+        _emit(args, result, f"Wrote {written}: {result['rows']} example rows, {result['signals']} signals")
+        return 0
+    result = api.lint(args.requirements, mapping=args.mapping, only=args.only)
+    _emit(args, result.to_json(), result.render())
+    return result.exit_code
 
 
 def main(argv: Sequence[str] | None = None) -> int:
