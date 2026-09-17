@@ -5,9 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 import json
-import os
-import tempfile
 
+from ._io import write_atomic as _write
 from .errors import BasltError, CompileError, SourceError, UsageError
 
 
@@ -30,19 +29,6 @@ class CompileResult:
         return {"status": self.status, "output": str(self.output) if self.output else None,
                 "size_bytes": self.size, "manifest": self.manifest, "error": self.error,
                 "exit_code": self.exit_code}
-
-
-def _write(path: Path, data: bytes) -> None:
-    """Replace the destination only after every byte has been written successfully."""
-    temporary = None
-    try:
-        with tempfile.NamedTemporaryFile(dir=path.parent, prefix=f".{path.name}.", delete=False) as handle:
-            temporary = Path(handle.name)
-            handle.write(data)
-        os.replace(temporary, path)
-    finally:
-        if temporary is not None:
-            temporary.unlink(missing_ok=True)
 
 
 def load_run(source, policy, *, max_size=None):

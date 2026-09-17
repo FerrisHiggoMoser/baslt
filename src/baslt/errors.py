@@ -61,6 +61,12 @@ class RequirementsError(PolicyError):
     """A requirements table or its mapping could not be read or validated. Issues carry sheet and cell locations."""
 
 
+class TableError(BasltError):
+    """A table file (CSV or spreadsheet) could not be read or written."""
+
+    exit_code = 3
+
+
 class SourceError(BasltError):
     """The simulation source could not be read or is malformed."""
 
