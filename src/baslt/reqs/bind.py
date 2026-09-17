@@ -438,8 +438,12 @@ def lint_against_source(reqset: RequirementSet, source, *, param_names: set[str]
     """Lint items for names, types and units that do not fit the given run."""
     from .lint import LintItem
 
+    from .run import source_parameters
+
     adapter, _ = open_run_source(source, reqset.config)
     infos = adapter.list_signals()
+    if param_names is not None and reqset.config.params.from_source:
+        param_names = set(param_names) | set(source_parameters(adapter, reqset.config.params.from_source))
     bound = bind_requirements(reqset, infos, param_names=param_names)
     items = []
     for issue in bound.issues:

@@ -277,6 +277,7 @@ class MatSource:
         self._global_time = global_time
         self._version: str | None = None
         self._vars: dict[str, _Var] | None = None
+        self._tree: dict[str, Any] = {}
         self._notes: list[str] = []
 
     @classmethod
@@ -303,8 +304,38 @@ class MatSource:
             tree, notes = read_v5_tree(self.path)
         variables, flat_notes = flatten(tree)
         self._vars = variables
+        self._tree = tree
         self._notes = notes + flat_notes
         return variables
+
+    def parameters(self) -> dict[str, object]:
+        """Scalars and character vectors of the file, by their path (`params/mass`): numbers, bools or text."""
+        self._scan()
+        found: dict[str, Leaf | str] = {}
+
+        def walk(node: Any, name: str, depth: int) -> None:
+            if depth > MAX_DEPTH:
+                return
+            if isinstance(node, str):
+                found[name] = node
+            elif isinstance(node, Leaf):
+                if node.dtype.kind in "biuf" and (node.shape == () or node.shape == (1,)):
+                    found[name] = node
+            elif isinstance(node, dict) and not _structure_with_time(node):
+                for key, child in node.items():
+                    walk(child, _join(name, str(key)), depth + 1)
+
+        for key, value in self._tree.items():
+            walk(value, str(key), 0)
+        out: dict[str, object] = {}
+        with self._context() as ctx:
+            for name, value in found.items():
+                if isinstance(value, str):
+                    out[name] = value
+                    continue
+                item = np.asarray(value.read(ctx)).reshape(-1)[0]
+                out[name] = bool(item) if value.dtype.kind == "b" else item.item()
+        return out
 
     def _is_time_array(self, name: str) -> bool:
         var = self._scan().get(name)

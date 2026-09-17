@@ -66,6 +66,7 @@ class Table:
     issues: list[str] = field(default_factory=list)
     delimiter: str | None = None
     encoding: str | None = None
+    row_labels: list[str] | None = None  # what a row is called in its file (ReqIF object ids)
 
     @property
     def n_rows(self) -> int:
@@ -95,6 +96,9 @@ class Table:
         """Where a cell is, as a person would look for it: `reqs.xlsx:Requirements!F12` or `reqs.csv:12:6`."""
         if self.format == "csv":
             return f"{self.path.name}:{row}" + (f":{col}" if col is not None else "")
+        if self.format == "reqif":
+            label = self.row_labels[row - 1] if self.row_labels and 1 <= row <= len(self.row_labels) else f"row {row}"
+            return f"{self.path.name}:{label}" + (f" ({self.text(1, col)})" if col is not None else "")
         where = f"{self.path.name}:{self.sheet}!" if self.sheet else f"{self.path.name}:"
         return where + (f"{column_letter(col)}{row}" if col is not None else f"row {row}")
 

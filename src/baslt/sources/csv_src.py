@@ -317,6 +317,10 @@ class CsvSource:
                 refs[name] = target
         return [n for n in names if n not in time_set], refs
 
+    def parameters(self) -> dict[str, object]:
+        """CSV files hold no run parameters."""
+        return {}
+
     def list_signals(self) -> list[SignalInfo]:
         table = self._read_table()
         data, refs = self._plan(table, self._time_hints, self._global_time)

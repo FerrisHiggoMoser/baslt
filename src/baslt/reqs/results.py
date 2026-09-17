@@ -21,8 +21,8 @@ from ..errors import Issue
 from .check import RequirementResult
 from .model import VERDICT_LABELS, RequirementSet
 
-__all__ = ["RunResult", "annotate", "fmt_time", "fmt_value", "render_run", "run_sheets", "write_csv",
-           "write_json"]
+__all__ = ["RunResult", "annotate", "annotated_name", "fmt_time", "fmt_value", "render_run", "run_sheets",
+           "write_csv", "write_json"]
 
 STYLE_OF = {"pass": "pass", "warn": "warn", "fail": "fail", "not_applicable": "na", "error": "error"}
 ORDER = {"fail": 0, "error": 1, "warn": 2, "not_applicable": 3, "pass": 4}
@@ -409,6 +409,12 @@ def write_back_values(reqset: RequirementSet, results: Mapping[str, RequirementR
                                              if case_result.margin is not None else "",
                                              "evidence": case_result.reason or ""}
     return rows
+
+
+def annotated_name(table) -> str:
+    """The file name of the checked copy: same name and kind, except ReqIF, whose copy is a CSV table."""
+    suffix = ".csv" if table.format == "reqif" else table.path.suffix
+    return f"{table.path.stem}.checked{suffix}"
 
 
 def annotate(reqset: RequirementSet, results: Mapping[str, RequirementResult], dst: Path, *,

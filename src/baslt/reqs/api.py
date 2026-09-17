@@ -6,7 +6,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from ..errors import Issue
+from ..errors import BasltError, Issue
 
 from .config import Config, load_config
 from .model import RequirementSet
@@ -107,17 +107,22 @@ def check(runs, requirements: str | Path, *, mapping: str | Path | Mapping | Non
 
     if fail_on not in ("fail", "warn", "none"):
         raise UsageError("fail_on must be fail, warn or none")
+    if max_size is not None:
+        from ..units import parse_bytes
+
+        try:
+            parse_bytes(max_size, path="max_size")
+        except BasltError as exc:
+            raise UsageError(str(exc)) from None
     reqset = load(requirements, mapping=mapping, only=only)
     many = isinstance(runs, (list, tuple)) or (isinstance(runs, (str, Path)) and _is_batch(runs))
-    if archive:
-        raise UsageError("--archive is not available yet")
     if many:
         from .batch import check_batch
 
         return check_batch(runs, reqset, requirements=requirements, mapping=mapping, only=only, params=params,
                            output=output, fail_on=fail_on, xlsx=xlsx, annotate=annotate, html=html, pages=pages,
                            jobs=jobs, resume=resume, hash=hash, show_all=show_all, progress=progress,
-                           worker=_worker, context=_context)
+                           archive=archive, max_size=max_size, worker=_worker, context=_context)
     return _check_single(runs, reqset, params=params, output=output, fail_on=fail_on, xlsx=xlsx,
                          annotate=annotate, html=html, archive=archive, max_size=max_size, hash=hash,
                          show_all=show_all)
@@ -130,10 +135,10 @@ def _is_batch(runs) -> bool:
 
 def _check_single(source, reqset: RequirementSet, *, params, output, fail_on, xlsx, annotate, html, archive,
                   max_size, hash, show_all) -> CheckResult:
-    from ..errors import SourceError
+    from ..errors import SourceError, UsageError
     from ..hashing import hash_file
     from .results import annotate as write_annotated
-    from .results import render_run, run_sheets, write_csv, write_json
+    from .results import annotated_name, render_run, run_sheets, write_csv, write_json
     from .run import check_run
 
     is_file = isinstance(source, (str, Path))
@@ -147,8 +152,17 @@ def _check_single(source, reqset: RequirementSet, *, params, output, fail_on, xl
     run, ctx = check_run(source, reqset, params=row, digest=digest)
     outputs: dict[str, Path] = {}
     folder = Path(output) if output is not None else (Path(source).with_suffix(".check") if is_file else None)
+    if archive and folder is None:
+        raise UsageError("archive needs an output folder for in-memory runs")
     if folder is not None:
         folder.mkdir(parents=True, exist_ok=True)
+        if archive and run.error is None:
+            from .archive import archive_run
+
+            path, notes = archive_run(source, reqset, run, folder / "run.baslt", max_size=max_size, hash=hash)
+            run.issues.extend(notes)
+            if path is not None:
+                outputs["archive"] = path
         outputs["json"] = write_json(folder / "results.json", run)
         outputs["csv"] = write_csv(folder / "results.csv", run)
         if xlsx:
@@ -156,8 +170,7 @@ def _check_single(source, reqset: RequirementSet, *, params, output, fail_on, xl
 
             outputs["xlsx"] = write_xlsx(folder / "results.xlsx", run_sheets(run, reqset), title="Requirement check")
         if annotate and run.error is None:
-            table = reqset.table
-            name = f"{table.path.stem}.checked{table.path.suffix}"
+            name = annotated_name(reqset.table)
             path, notes = write_annotated(reqset, {r.id: r for r in run.results}, folder / name, t0=run.t0)
             outputs["annotated"] = path
             for note in notes:

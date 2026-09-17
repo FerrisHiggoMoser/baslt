@@ -140,8 +140,8 @@ def test_problems_before_checking(files, capsys):
     assert "no run files match" in capsys.readouterr().err
     assert main(["check", str(run), "-r", str(table), "--jobs", "many"]) == 3
     assert "--jobs takes a number or auto" in capsys.readouterr().err
-    assert main(["check", str(run), "-r", str(table), "--archive"]) == 3
-    capsys.readouterr()
+    assert main(["check", str(run), "-r", str(table), "--max-size", "lots", "--archive"]) == 3
+    assert "max_size" in capsys.readouterr().err
     assert main(["check", str(run), "-r", str(table), "--fail-on", "sometimes"]) == 3
 
 

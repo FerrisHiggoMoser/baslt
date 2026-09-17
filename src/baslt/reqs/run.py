@@ -28,6 +28,26 @@ def _param_names(params: Mapping[str, object] | None) -> set[str] | None:
     return None if params is None else set(params)
 
 
+def source_parameters(adapter, patterns) -> dict[str, object]:
+    """Parameters stored in the run file whose path or leaf name matches `patterns` (globs), under names that
+    `param.<name>` can use: the leaf name, or the whole path with `_` where the leaf repeats."""
+    import fnmatch
+    import re
+
+    reader = getattr(adapter, "parameters", None)
+    if not patterns or reader is None:
+        return {}
+    found = {path: value for path, value in reader().items()
+             if any(fnmatch.fnmatchcase(path, p) or fnmatch.fnmatchcase(path.rsplit("/", 1)[-1], p)
+                    for p in patterns)}
+    leaves = [path.rsplit("/", 1)[-1] for path in found]
+    out: dict[str, object] = {}
+    for path, leaf in zip(found, leaves):
+        name = leaf if leaves.count(leaf) == 1 else path
+        out[re.sub(r"\W", "_", name)] = found[path]
+    return out
+
+
 def check_run(source, reqset: RequirementSet, *, params: Mapping[str, object] | None = None,
               run_id: str | None = None, digest: str | None = None) -> tuple[RunResult, RunContext | None]:
     """Every covered requirement of `reqset` on one run. Problems of the run itself are recorded, not raised."""
@@ -47,6 +67,9 @@ def check_run(source, reqset: RequirementSet, *, params: Mapping[str, object] | 
     try:
         adapter, options = open_run_source(source, config)
         result.format = adapter.format
+        if config.params.from_source:
+            params = {**source_parameters(adapter, config.params.from_source), **(params or {})}
+            result.params = dict(params)
         infos = adapter.list_signals()
         bound = bind_requirements(reqset, infos, param_names=_param_names(params))
         result.issues.extend(bound.issues)

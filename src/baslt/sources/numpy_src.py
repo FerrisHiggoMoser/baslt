@@ -104,6 +104,14 @@ class NumpySource:
     def _unit(self, name: str, default: str | None = None) -> str | None:
         return self._units.get(name, default)
 
+    def parameters(self) -> dict[str, object]:
+        """Single numbers, bools and texts given next to the arrays of an in-memory mapping."""
+        out: dict[str, object] = {}
+        for name, value in self._entries.items():
+            if isinstance(value, np.ndarray) and value.ndim == 0 and value.dtype.kind in "biufU":
+                out[name] = value.item()
+        return out
+
     def list_signals(self) -> list[SignalInfo]:
         if self._run is not None:
             return self._run.infos()

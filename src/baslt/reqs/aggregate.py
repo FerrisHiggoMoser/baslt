@@ -230,7 +230,7 @@ class BatchSummary:
 
     def write_annotated(self, output: Path) -> tuple[Path | None, list[str]]:
         from .check import RequirementResult
-        from .results import annotate
+        from .results import annotate, annotated_name
 
         results = {}
         for rid, req in zip(self.ids, self.requirements):
@@ -241,8 +241,7 @@ class BatchSummary:
                 unit=worst.get("unit"), value=worst.get("value"), limit=worst.get("limit"),
                 margin=worst.get("margin"), margin_pct=worst.get("pct"),
                 totals={"runs": stat["counts"]["fail"]})
-        table = self.reqset.table
-        name = f"{table.path.stem}.checked{table.path.suffix}"
+        name = annotated_name(self.reqset.table)
         aggregate = {rid: self.sentence(rid) for rid in self.ids}
         return annotate(self.reqset, results, output / name, aggregate=aggregate)
 

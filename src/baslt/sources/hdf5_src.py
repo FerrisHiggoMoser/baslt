@@ -141,6 +141,25 @@ class Hdf5Source:
                 datasets[name] = _Dataset(name=name, shape=tuple(int(s) for s in obj.shape), dtype=dtype, unit=unit,
                                           time_attr=time_attr, chunks=obj.chunks)
 
+    def parameters(self) -> dict[str, object]:
+        """Scalar datasets and the file's own attributes, by their path: numbers, bools or text."""
+        h5py = _h5py()
+        out: dict[str, object] = {}
+        with self._open() as f:
+            for key, value in f.attrs.items():
+                item = _scalar(value, f)
+                if item is not None:
+                    out[key] = item
+
+            def visit(name: str, obj: Any) -> None:
+                if isinstance(obj, h5py.Dataset) and obj.size == 1 and obj.ndim <= 1 and obj.dtype.fields is None:
+                    item = _scalar(obj[()], f)
+                    if item is not None:
+                        out[name] = item
+
+            f.visititems(visit)
+        return out
+
     def _is_time_array(self, name: str) -> bool:
         ds = self._scan().get(name)
         if ds is None:
@@ -290,6 +309,21 @@ def _object_id(obj: Any) -> tuple[int, int] | None:
         return int(info.fileno), int(info.addr)
     except (AttributeError, KeyError, RuntimeError, ValueError):
         return None
+
+
+def _scalar(value: Any, f: Any) -> object:
+    """A number, bool or text from a one-element HDF5 value, else None."""
+    if isinstance(value, np.ndarray):
+        if value.size != 1:
+            return None
+        value = value.reshape(-1)[0]
+    if isinstance(value, (np.bool_, bool)):
+        return bool(value)
+    if isinstance(value, (np.integer, np.floating)):
+        return value.item()
+    if isinstance(value, (int, float)):
+        return value
+    return _attr_text(value, f)
 
 
 def _attr_text(value: Any, f: Any) -> str | None:

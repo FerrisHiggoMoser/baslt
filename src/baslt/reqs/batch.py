@@ -259,6 +259,7 @@ def _compact(record: dict, *, page: str | None, cached: bool) -> dict:
         "duration": record.get("duration"), "results": results, "violations": violations,
         "series": record.get("envelopes", {}), "plots": record.get("plots", {}), "page": page, "cached": cached,
         "timing": record.get("timing", {}), "key": record.get("cache_key"), "format": record.get("format"),
+        "archive": record.get("archive"), "issues": record.get("issues", []),
     }
 
 
@@ -283,6 +284,13 @@ def check_one(task: dict) -> dict:
             run = RunResult(run_id=task["id"], source=str(path), format="unknown",
                             requirements_file=reqset.table.path.name, params=dict(task["params"]), error=str(exc),
                             not_covered=list(reqset.not_covered))
+        archived = None
+        if task.get("archive") and run.error is None:
+            from .archive import archive_run
+
+            archived, notes = archive_run(path, reqset, run, folder / f"{task['id']}.baslt",
+                                          max_size=task.get("max_size"), hash=task["hash"])
+            run.issues.extend(notes)
         series, plots = envelopes(run, ctx)
         record = run.to_json()
         record.update({"cache_key": task["key"], "envelopes": series, "plots": plots, "baslt": __version__})
@@ -295,6 +303,7 @@ def check_one(task: dict) -> dict:
             write_run_report(folder / f"{task['id']}.html", run, ctx, reqset)
             page = f"runs/{task['id']}.html"
         record["page"] = page
+        record["archive"] = f"runs/{task['id']}.baslt" if archived is not None else None
         write_atomic(folder / f"{task['id']}.json", (json.dumps(record, ensure_ascii=False) + "\n").encode())
         return _compact(record, page=page, cached=False)
     except Exception as exc:  # noqa: BLE001 - one broken run must not stop the batch
@@ -367,6 +376,7 @@ def cache_key(task: dict, reqset, mapping_digest: str) -> str:
         "baslt": __version__, "requirements": reqset.sha256, "mapping": mapping_digest, "only": task["only"],
         "params": task["params"], "path": str(path.resolve()), "size": stat.st_size if stat else None,
         "mtime": stat.st_mtime_ns if stat else None, "hash": task["hash"],
+        "archive": [bool(task.get("archive")), task.get("max_size")],
     }
     return hashlib.sha256(json.dumps(parts, sort_keys=True, default=str).encode()).hexdigest()
 
@@ -399,6 +409,9 @@ def _cached(task: dict, output: Path) -> dict | None:
         return None
     if not wants_page:
         page = page if page and (output / page).is_file() else None
+    if task.get("archive") and record.get("status") != "error" and not (output / "runs" /
+                                                                          f"{task['id']}.baslt").is_file():
+        return None
     return _compact(record, page=page, cached=True)
 
 
@@ -453,7 +466,8 @@ def run_pool(tasks: Sequence[dict], jobs: int, on_done: Callable[[dict, dict], N
 def check_batch(runs, reqset, *, requirements, mapping=None, only=None, params=None, output=None,
                 fail_on: str = "fail", xlsx: bool = True, annotate: bool = True, html: bool = True,
                 pages: str | None = None, jobs="auto", resume: bool = False, hash: str = "sampled",
-                show_all: bool = False, progress: Callable[[str], None] | None = None,
+                show_all: bool = False, progress: Callable[[str], None] | None = None, archive: bool = False,
+                max_size=None,
                 context: str | None = None, worker: Callable[[dict], dict] | None = None):
     from .api import CheckResult, _exit_code
     from .params import load_params, row_for
@@ -484,7 +498,7 @@ def check_batch(runs, reqset, *, requirements, mapping=None, only=None, params=N
         task = {"index": index, "id": rid, "path": str(path), "params": row, "requirements": str(requirements),
                 "mapping": mapping if isinstance(mapping, Mapping) or mapping is None else str(mapping),
                 "only": list(only) if only else None, "output": str(output), "pages": pages if html else "none",
-                "hash": hash}
+                "hash": hash, "archive": bool(archive), "max_size": None if max_size is None else str(max_size)}
         task["key"] = cache_key(task, reqset, mapping_digest)
         tasks.append(task)
     count = len(tasks)
