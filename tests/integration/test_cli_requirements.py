@@ -77,7 +77,8 @@ def test_lint_errors_exit_3(tmp_path, capsys):
 
 
 def test_requirements_commands_stay_light():
-    code = ("import sys, baslt.cli, baslt.reqs.api, baslt.reqs.load, baslt.reqs.lint, baslt.reqs.templates; "
+    code = ("import sys, baslt.cli, baslt.reqs.api, baslt.reqs.load, baslt.reqs.lint, baslt.reqs.templates, "
+            "baslt.reqs.expr; "
             "print(sorted(m for m in ('numpy', 'yaml', 'h5py', 'scipy') if m in sys.modules))")
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True).stdout
     assert out.strip() == "[]"
