@@ -74,7 +74,9 @@ Roles: `#peak`, `#base`.
 
 1. **Level crossings** between consecutive finite samples i, i+1:
    rising if `x[i] < V ≤ x[i+1]`, falling if `x[i] ≥ V > x[i+1]`.
-   Crossing time with `interpolate: linear`: `tc = t[i] + (t[i+1] − t[i]) · (V − x[i]) / (x[i+1] − x[i])`.
+   Crossing time with `interpolate: linear`: `tc = t[i] + (t[i+1] − t[i]) · (V − x[i]) / (x[i+1] − x[i])`,
+   clamped to `[t[i], t[i+1]]` (rounding can otherwise put it one ulp outside its bracket and reorder flips
+   that share a timestamp).
    With `interpolate: none`: `tc = t[i+1]`, and the evidence records `t[i+1] − t[i]` as discretization error.
 2. **State.** With H = 0 the state of sample j is `x[j] ≥ V`. With H > 0: `hi = V + H/2`, `lo = V − H/2`; the
    state becomes high at a sample with `x ≥ hi`, low at a sample with `x ≤ lo` **and** `x < V`, and otherwise holds.

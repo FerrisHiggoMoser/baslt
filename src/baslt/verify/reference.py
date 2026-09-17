@@ -71,12 +71,13 @@ def finite(x) -> np.ndarray:
 
 
 def crossing_time(t_before: float, t_after: float, x_before: float, x_after: float, level: float) -> float:
-    """`tc = t[i] + (t[i+1] - t[i]) * (V - x[i]) / (x[i+1] - x[i])`, the linear crossing time of `level`.
+    """`tc = t[i] + (t[i+1] - t[i]) * (V - x[i]) / (x[i+1] - x[i])`, the linear crossing time of `level`, clamped
+    to `[t[i], t[i+1]]` as the contract says (rounding can otherwise land one ulp outside the bracket).
 
     Callers only use it on a pair that straddles `level`, so `x_after != x_before`.
     """
     t0, t1, x0, x1, v = float(t_before), float(t_after), float(x_before), float(x_after), float(level)
-    return t0 + (t1 - t0) * (v - x0) / (x1 - x0)
+    return min(max(t0 + (t1 - t0) * (v - x0) / (x1 - x0), t0), t1)
 
 
 def _crossing_times(t_before, t_after, x_before, x_after, level: float) -> np.ndarray:
@@ -84,7 +85,8 @@ def _crossing_times(t_before, t_after, x_before, x_after, level: float) -> np.nd
 
     Only called with pairs that straddle `level`, where `x_after != x_before`; no lane divides by zero.
     """
-    return t_before + (t_after - t_before) * (float(level) - x_before) / (x_after - x_before)
+    tc = t_before + (t_after - t_before) * (float(level) - x_before) / (x_after - x_before)
+    return np.minimum(np.maximum(tc, t_before), t_after)
 
 
 # ---------------------------------------------------------------------------------------------------------------
