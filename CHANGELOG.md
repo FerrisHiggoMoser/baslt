@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- `baslt check` tests runs against requirement tables (Excel, CSV, ReqIF) with cases per phase, event window, run
+  parameter or limit curve; limit, assert, duration, value and event checks with tolerances, warning margins, gap and
+  missing-event rules; exact violation times; results as text, JSON, CSV, a workbook and the requirements table with
+  verdicts written back (Excel files change only in the result cells).
+- A report page per run with linked, zoomable plots of every requirement, and full-resolution windows around
+  failures, in one file that loads nothing from the network.
+- Batches of runs in parallel processes, with parameter tables, resume, crash isolation, a batch workbook and a
+  dashboard (verdict matrix, each requirement over all runs, margins against parameters).
+- `--archive` compiles each checked run with a policy made from its requirements.
+- `baslt requirements init` and `lint`, an expression language with units, events and aggregates, run parameters
+  read from HDF5 and MAT-files, and a standard-library reader, writer and patcher for `.xlsx`.
+- Batch example `examples/rocket_batch.py`; `rocket_sim.simulate` takes a thrust scale and a payload.
+- Atomic writes give files the usual permissions instead of owner-only.
 - Soft layer: every signal gets a nested min/max preview weighted by its priority, and the compiler searches for the
   largest preview that fits the budget, measuring each trial exactly.
 - The manifest splits the budget into required, discretionary and overhead bytes and hard and soft samples per

@@ -42,7 +42,7 @@ FULL = {
                "table2": {"x": [0, 1], "y": [5, 6]}},
     "params": {"key": "run", "file": "runs.csv", "units": {"payload": "kg"}},
     "defaults": {"tolerance": "50 ms", "margin": "5 %", "on_gap": "fail", "on_missing_event": "na"},
-    "report": {"title": "Ascent", "pages": "all", "plot_bins": 256, "overlays": ["q", "alpha"]},
+    "report": {"title": "Ascent", "pages": "all", "plot_bins": 256},
     "archive": {"max_size": "2 MiB"},
 }
 
@@ -69,7 +69,7 @@ def test_a_complete_mapping(tmp_path):
     assert config.curves["table2"].points == [(0.0, 5.0), (1.0, 6.0)]
     assert config.params.units == {"payload": "kg"}
     assert (config.defaults.tolerance, config.defaults.margin, config.defaults.on_gap) == ("50 ms", "5 %", "fail")
-    assert (config.report.pages, config.report.plot_bins, config.report.overlays) == ("all", 256, ["q", "alpha"])
+    assert (config.report.pages, config.report.plot_bins) == ("all", 256)
     assert config.archive_max_size == "2 MiB"
     assert config.base == tmp_path.resolve() and config.sources == ["map.json"]
     assert len(config.sha256) == 64

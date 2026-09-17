@@ -107,6 +107,10 @@ class SourceAdapter(Protocol):
 def open_source(source: str | Path | Mapping, *, format: str | None = None, **options) -> SourceAdapter
 ```
 
+Adapters may also provide `parameters() -> dict[str, object]`: single numbers, bools and texts stored in the file
+(HDF5 scalar datasets and file attributes, MAT-file scalars and character vectors, scalars next to in-memory arrays;
+CSV has none). Requirement checks read them with `params.from_source`.
+
 Time association order: `time_hints[name]` → dataset attribute `time`/`t` → sibling named `t`, `time`, `Time`,
 `timestamp` or `tout` in the same group/struct → `global_time` → such a clock in the nearest parent group (so a
 file-level `/time` serves `/simout/q_dyn`) → top-level `tout` → `SourceError`. Time signals themselves are not listed
@@ -214,6 +218,71 @@ class Artifact:
 
 def read_artifact(source: str | Path | bytes) -> Artifact      # stdlib zipfile + profile checks; ContainerError
 ```
+
+### `baslt.tabular`
+
+Numpy-free tables for requirement files, standard library only.
+
+```python
+@dataclass(slots=True)
+class Cell:                    # value: str | float | bool | None; text: what a person sees; ref: "F12"
+@dataclass(slots=True)
+class Table:                   # rows of cells, 1-based access; location(row, col) -> "reqs.xlsx:Requirements!F12"
+def read_table(path, *, sheet=None, encoding=None, delimiter=None) -> Table   # .csv/.tsv, .xlsx, .reqif/.reqifz
+def list_sheets(path) -> list[SheetInfo]
+def write_xlsx(path, sheets: Sequence[Sheet], *, title=None) -> Path       # deterministic bytes, atomic
+def patch_xlsx(src, dst, *, sheet, edits: Sequence[CellEdit]) -> list[str] # changes only the edited cells
+```
+
+The `.xlsx` reader uses `zipfile` and `ElementTree`, handles shared and inline strings, rich text, percent and date
+styles, merged cells and the strict namespace, and refuses DOCTYPE declarations, legacy `.xls` files and parts
+that expand too much. The writer emits a minimal workbook (fixed timestamps and part order, verdict fills, number and
+percent formats); text that looks like a formula stays text. The patcher rewrites the cells it is given in one sheet
+part and copies every other member byte for byte. `reqif.py` reads ReqIF: one row per SPEC-OBJECT in hierarchy
+order, one column per attribute long name.
+
+### `baslt.reqs`
+
+Requirement checks, separate from the compiler (`docs/requirements.md`). `api`, `load`, `lint`, `templates`,
+`config`, `limits`, `model` and `units_ext` import no numpy.
+
+```
+config.load_config(mapping, workbook=, overrides=) -> Config          # YAML/JSON/sheets, merged, validated
+load.load_requirements(path, config, only=) -> RequirementSet         # header, where, columns, cases, coverage
+limits.parse_limit(cell, unit=, units=) -> LimitSpec                   # the limit-cell grammar
+expr.parse(text) -> N ; expr.Binder(index, infos, config).bind(text, role=) -> BoundExpr   # whitelisted AST, types, units
+bind.bind_requirements(reqset, infos, param_names=) -> BoundSet        # kinds, limits in the checked unit
+align.Signals / Grid                                                   # clocks and resampling (verify.reference)
+evaluate.RunContext(run, config, params=)                              # values, three-valued conditions, events, aggregates
+check.evaluate_requirement(bound_requirement, ctx) -> RequirementResult
+run.check_run(source, reqset, params=, run_id=, digest=) -> (RunResult, RunContext)
+results                                                                # text, JSON, CSV, workbook sheets, checked copy
+plotdata.build_plots(run, ctx, packer) / report.write_run_report(path, run, ctx, reqset)
+batch.check_batch(...) / aggregate.BatchSummary                        # processes, resume, dashboard, batch workbook
+archive.derived_policy(reqset, bound, infos) / archive_run(...)        # --archive through api.compile
+api.check(runs, requirements, ...) -> CheckResult                      # what the CLI calls
+```
+
+A check opens the source, binds the requirements against its signal list (so a requirement with an unknown name is
+an ERROR before any data is read), loads only the signals the requirements and events need, detects the events,
+and evaluates each requirement on its grid. Expression values are cached per (expression, grid) in a byte-bounded
+cache. Batch workers run `batch.check_one` in a `forkserver` process pool (one thread, lower priority) and return
+compact summaries with 256-bin envelopes of each plotted signal; the parent writes `index.jsonl` as they arrive and
+merges the envelopes onto one time axis for the dashboard.
+
+### `baslt.report`
+
+```python
+class Packer:                                  # arrays -> one raw-DEFLATE, base64 blob; refs {"o","n","k",...}
+def page(title, body, *, styles, scripts, data=None, blob=None, description=None) -> str
+def render_run_page(run, reqset, plots, packer) -> str          # check_page.py
+def render_batch_page(summary, data, packer) -> str             # dashboard.py
+```
+
+Pages are single files. The content security policy allows only the page's own script and style (by SHA-256 hash)
+and loads nothing else. `assets/report.js` and `assets/dash.js` inflate the blob with `DecompressionStream`, draw
+canvas plots, and run a self-test with `?selftest=1` that writes array digests and draw counts into
+`<pre id="selftest">` for the browser tests.
 
 ## Pipeline
 

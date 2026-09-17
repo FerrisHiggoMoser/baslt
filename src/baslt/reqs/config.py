@@ -174,7 +174,6 @@ class ReportSpec:
     title: str | None = None
     pages: str = "failed"
     plot_bins: int = 512
-    overlays: list[str] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -897,12 +896,11 @@ class _Parser:
         return defaults
 
     def report(self, value: object, path: str) -> ReportSpec:
-        spec = self.keys(value, ("title", "pages", "plot_bins", "overlays"), path)
+        spec = self.keys(value, ("title", "pages", "plot_bins"), path)
         report = ReportSpec(title=self.text(spec.get("title"), join_path(path, "title")))
         report.pages = self.choice(spec.get("pages"), ("failed", "all", "none"), join_path(path, "pages"), "failed")
         bins = self.integer(spec.get("plot_bins"), join_path(path, "plot_bins"), minimum=64, maximum=8192)
         if bins is not None:
             report.plot_bins = bins
-        report.overlays = self.text_list(spec.get("overlays"), join_path(path, "overlays"))
         return report
 

@@ -190,3 +190,16 @@ def test_duplicate_headers_and_missing_passthrough(tmp_path):
     messages = [w.message for w in reqs.warnings]
     assert any("appears twice" in m for m in messages) and "column 'Team' is not in the header row" in messages
     assert reqs.requirements[0].passthrough == {"Owner": "me"}
+
+
+def test_a_filter_column_is_not_a_check_field(tmp_path):
+    path = tmp_path / "polarion.csv"
+    path.write_text("ID,Title,Type,Status,Check,Limit\n,Loads,Heading,,,\nLV-1,Max q,Requirement,approved,q,<= 70\n"
+                    "LV-2,Prose,Requirement,approved,,\n", encoding="utf-8")
+    reqset = load(path, mapping={"requirements": {"where": {"Type": ["Requirement"], "Status": ["approved"]}}})
+    assert [(r.id, r.kind, r.issues) for r in reqset.requirements] == [("LV-1", None, []), ("LV-2", None, [])]
+    assert "kind" not in reqset.columns
+    assert any("filters rows" in w.message for w in reqset.warnings)
+    path.write_text("ID,Type,Check,Limit\nLV-1,upper,q,70\nLV-2,assert,q > 1,\n", encoding="utf-8")
+    reqset = load(path, mapping={"requirements": {"where": {"Type": ["upper"]}, "columns": {"kind": "Type"}}})
+    assert [(r.id, r.kind) for r in reqset.requirements] == [("LV-1", "upper")]

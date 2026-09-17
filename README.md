@@ -45,6 +45,23 @@ verification = baslt.verify_artifact("run.baslt")
 `on_error="record", suggestions="off", threads=1`; the returned result carries failures and the adjacent
 `.error.json` explains them. See [the CLI reference](docs/cli.md) and [contracts](docs/contracts.md).
 
+## Requirement checks
+
+`baslt check` tests runs against a requirements table from Excel, CSV or a Polarion/DOORS ReqIF export and says what
+went wrong: which requirement failed, by how much, when and in which phase. Limits can change per flight phase,
+event window, run parameter or as a curve over another signal. One run gives a report page with a plot per
+requirement, a results workbook and the requirements table with the verdicts written in; a folder of runs gives a
+dashboard with a verdict matrix and each requirement over all runs.
+
+```sh
+baslt requirements init -o reqs.xlsx                  # template with examples and a guide
+baslt requirements lint reqs.xlsx --source run.h5     # names, units and limits resolved against a run
+baslt check run.h5 -r reqs.xlsx                       # run.check/report.html, results.xlsx, reqs.checked.xlsx
+baslt check runs/ -r reqs.xlsx --params runs.csv      # every run in parallel; runs.check/index.html
+```
+
+See [requirement checks](docs/requirements.md) for the table layout, the expression language and the outputs.
+
 ## Planned v0.1 scope
 
 - Inputs: MATLAB `.mat` (v5/v7 and v7.3), HDF5, CSV, and NumPy arrays in memory. MAT-files carry no units, so

@@ -1,7 +1,7 @@
 """Plot data for the run report: small, deduplicated traces with the limits, windows and violations of each check.
 
-Traces keep every sample up to 1024 samples. Longer ones keep the lowest and highest sample of 512 equal-count
-bins, so the global extremes always survive, plus the first sample of each stretch of missing data so lines
+Traces keep every sample up to twice `report.plot_bins` (512 by default). Longer ones keep the lowest and highest
+sample of that many equal-count bins, so the global extremes always survive, plus the first sample of each stretch of missing data so lines
 break there. Failing and warning checks also get detail windows at full resolution around their worst point and
 their first violations. Times are stored relative to `base` (time zero of the run, or 0).
 """
@@ -23,7 +23,6 @@ from .units_ext import UnitsError
 __all__ = ["build_plots", "overview_indices"]
 
 OVERVIEW_BINS = 512
-RAW_LIMIT = 2 * OVERVIEW_BINS
 GAP_MARKS = 256
 STEP_LIMIT = 512
 DETAIL_HALF = 64
@@ -34,13 +33,13 @@ PHASE_SPANS = 64
 PLOT_ERRORS = (EvalError, ExprError, UnitsError, LookupError, ValueError)
 
 
-def overview_indices(values: np.ndarray) -> np.ndarray:
+def overview_indices(values: np.ndarray, bins: int = OVERVIEW_BINS) -> np.ndarray:
     """Sample indices that keep the shape of a 1-D series: all of them, or bin extremes and gap starts."""
     n = int(values.shape[0])
-    if n <= RAW_LIMIT:
+    if n <= 2 * bins:
         return np.arange(n, dtype=np.int64)
     finite = np.isfinite(values)
-    _, amin, _, amax = minmax_bins(values, finite, OVERVIEW_BINS)
+    _, amin, _, amax = minmax_bins(values, finite, bins)
     keep = [amin[amin < n], amax[amax < n], np.array([0, n - 1], dtype=np.int64)]
     bad = ~finite
     if bad.any():
@@ -84,6 +83,7 @@ class PlotBuilder:
         self.ctx = ctx
         self.base = base
         self.packer = packer
+        self.bins = ctx.config.report.plot_bins
         self.series: list[dict] = []
         self._series_index: dict[tuple, int] = {}
 
@@ -101,7 +101,7 @@ class PlotBuilder:
         if found is not None:
             return found
         values = np.asarray(values, dtype=np.float64)
-        keep = overview_indices(values)
+        keep = overview_indices(values, self.bins)
         entry = {"name": name, "unit": unit if unit not in (None, "1", "?") else None, "discrete": bool(discrete),
                  "labels": labels, "t": self.times(t[keep]), "v": self.packer.uint16(values[keep]),
                  "samples": int(values.shape[0])}
@@ -116,7 +116,7 @@ class PlotBuilder:
         steps = _step_indices(values)
         if steps is not None:
             return {"side": side, "step": True, "t": self.times(t[steps]), "v": self.packer.uint16(values[steps])}
-        keep = overview_indices(values)
+        keep = overview_indices(values, self.bins)
         return {"side": side, "step": False, "t": self.times(t[keep]), "v": self.packer.uint16(values[keep])}
 
     # ----- one requirement --------------------------------------------------------------------------------
@@ -180,7 +180,7 @@ class PlotBuilder:
         elif trace.x is not None and result.at is not None and isinstance(result.value, float):
             spec["marker"] = {"t": _rel(result.at, self.base), "v": _num(result.value),
                               "c": int(result.totals.get("component", 0))}
-        if result.verdict in ("fail", "warn") and grid.n > RAW_LIMIT:
+        if result.verdict in ("fail", "warn") and grid.n > 2 * self.bins:
             spec["details"] = self.details(result, trace, x)
         return spec
 

@@ -120,13 +120,22 @@ def map_columns(table: Table, header_row: int, layout: Layout, fields: Sequence[
         seen[name] = col
     taken: set[int] = set()
     columns: dict[str, int] = {}
+    filters = {normalize_header(key) for key in layout.where}
     for field in fields:
+        configured = bool(layout.columns.get(field))
         for candidate in _candidates(field, layout):
             col = seen.get(candidate)
-            if col is not None and col not in taken:
-                columns[field] = col
-                taken.add(col)
-                break
+            if col is None or col in taken:
+                continue
+            if candidate in filters and not configured:
+                # a column that filters rows (a Polarion "Type" of Heading or Requirement) is not a check field
+                notes.append(f"{table.location(header_row, col)}: column {table.text(header_row, col)!r} filters "
+                             f"rows (requirements.where), so it is not read as the {field} field; name that "
+                             f"column under requirements.columns.{field} if it is")
+                continue
+            columns[field] = col
+            taken.add(col)
+            break
     return columns, notes
 
 

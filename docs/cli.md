@@ -7,7 +7,7 @@ Every command accepts `--json` (machine-readable output with a top-level `"statu
 | Code | Meaning |
 |---|---|
 | 0 | Success, or verification passed (warnings allowed unless `--strict`). |
-| 1 | A contract or integrity check failed, `--strict` saw a warning, or `--fail-on` matched. |
+| 1 | A contract or integrity check failed, `--strict` saw a warning, a requirement failed (`check`), or `--fail-on` matched. |
 | 2 | Infeasible budget, or an internal compile error. |
 | 3 | Usage, policy, source or container input error. |
 
@@ -68,6 +68,61 @@ baslt sweep INPUTS... --policy POLICY -o OUTDIR [--jobs auto|N] [--resume] [--wa
 thread per worker. `OUTDIR` receives `index.jsonl` (one summary per run, appended as runs finish), `summary.json`,
 `sweep.html`, `runs/<id>.baslt`, `runs/<id>.html` for limit-violation runs, and `runs/<id>.error.json` for failures.
 `--resume` skips runs already in `index.jsonl`. `--params` joins a CSV with a `run` column to add parameter columns.
+
+## `baslt check`
+
+```
+baslt check RUN... -r REQUIREMENTS [-m MAPPING] [--params TABLE] [-o OUT] [--jobs auto|N] [--resume]
+            [--fail-on fail|warn|none] [--pages failed|all|none] [--only ID] [--no-html] [--no-xlsx]
+            [--no-annotate] [--archive [--max-size SIZE]] [--hash sampled|full|none] [--all]
+```
+
+Tests runs against a requirements table (`.xlsx`, `.csv`, `.reqif` or `.reqifz`). One `RUN` file is checked in this
+process and its results go to `OUT` (default `<run>.check/`): `report.html`, `results.xlsx`, `results.json`,
+`results.csv` and `<requirements>.checked.<ext>`, the table with the verdicts written in. Several files, a folder
+or a glob pattern are a batch: runs are checked in `--jobs` processes, progress goes to stderr, and `OUT` (default
+`<folder>.check/`) gets `index.html`, `results.xlsx`, `summary.json`, `index.jsonl`, the checked copy and
+`runs/<id>.json` (plus `runs/<id>.html` per `--pages`). `--resume` skips runs whose stored result is up to date.
+
+The terminal shows every requirement that did not pass (`--all` shows every one) with its worst value, limit,
+margin, time and where it happened:
+
+```
+VERDICT  ID      TITLE                 WORST      LIMIT      MARGIN              AT
+FAIL     LV-001  Max dynamic pressure  72.66 kPa  <= 70 kPa  -2.66 kPa (-3.8 %)  T+60.953 s  ascent, high_q; 56.0 s after pitch_start
+```
+
+`-m` gives the mapping (YAML or JSON); config sheets inside the workbook work too. `--params` is a table with one
+row per run. `--only` (repeatable, globs) checks a subset of ids. `--archive` also compiles each run to a `.baslt`
+artifact protecting what the requirements check; `--max-size` is its budget. `--hash` sets how the run file is
+fingerprinted in the results.
+
+Exit codes: 0 when nothing failed, 1 when a requirement failed (or warned, with `--fail-on warn`; never with
+`--fail-on none`), 3 for unusable requirements, mappings or options and when nothing failed but something ended in
+ERROR, 2 for an internal error. See [requirements.md](requirements.md).
+
+## `baslt requirements init`
+
+```
+baslt requirements init [-o reqs.xlsx] [--template generic|polarion] [--mapping-output MAP] [--source RUN] [--force]
+```
+
+Writes a requirements template: an `.xlsx` workbook with example rows, the config sheets (Signals, Events,
+Conditions, Curves, Units, Settings) and a Guide sheet, or a `.csv` table with its mapping next to it
+(`--mapping-output`, YAML when PyYAML is installed, else JSON). The examples check `examples/rocket_sim.py`; with
+`--source` the Signals sheet lists the run's own signals instead. `polarion` lays the table out like a Polarion
+export with verification fields, a `where` filter and `write_back`.
+
+## `baslt requirements lint`
+
+```
+baslt requirements lint REQUIREMENTS [-m MAPPING] [--source RUN] [--params TABLE] [--only ID]
+```
+
+Reads the table and mapping and reports every problem with its cell (`reqs.xlsx:Requirements!E12`): unknown
+types, limits that do not parse, rows not covered, mapping errors. With `--source`, names, units and limits are also
+resolved against that run, as `check` would; with `--params` too, `param.` names are checked. Exit code 0 when
+there are no errors (warnings allowed), 3 otherwise.
 
 ## `baslt inspect`
 
