@@ -115,6 +115,11 @@ def check(runs, requirements: str | Path, *, mapping: str | Path | Mapping | Non
         except BasltError as exc:
             raise UsageError(str(exc)) from None
     reqset = load(requirements, mapping=mapping, only=only)
+    if not reqset.covered:
+        from ..errors import RequirementsError
+
+        reasons = [w.message for w in reqset.warnings if w.path == "requirements"]
+        raise RequirementsError(f"{reqset.table.path.name}: {reasons[0] if reasons else 'no requirement to check'}")
     many = isinstance(runs, (list, tuple)) or (isinstance(runs, (str, Path)) and _is_batch(runs))
     if many:
         from .batch import check_batch

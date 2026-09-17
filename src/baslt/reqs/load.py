@@ -164,6 +164,17 @@ def _kind(text: str) -> str | None:
     return BUILTIN_KIND_WORDS.get(word) or BUILTIN_KIND_WORDS.get(normalize_header(word))
 
 
+def _nothing_selected(layout: Layout, skipped: int, only) -> str:
+    """Why a table gave no requirement to check."""
+    reasons = []
+    if skipped:
+        filters = "; ".join(f"{column}: {', '.join(values)}" for column, values in layout.where.items())
+        reasons.append(f"{skipped} rows were left out by requirements.where ({filters})")
+    if only:
+        reasons.append(f"--only kept {', '.join(only)}")
+    return "no requirement to check" + (": " + " and ".join(reasons) if reasons else "")
+
+
 class _Loader:
     def __init__(self, config: Config) -> None:
         self.config = config
@@ -452,6 +463,9 @@ def load_requirements(path: str | Path, config: Config, *, only: Sequence[str] |
 
     if only:
         requirements = [req for req in requirements if any(fnmatchcase(req.id, pattern) for pattern in only)]
+    if not any(req.covered for req in requirements):
+        loader.warnings.append(Issue(path="requirements", message=_nothing_selected(layout, skipped, only),
+                                     location=table.location(header_row)))
     not_covered = [req.id for req in requirements if not req.covered]
     sheet = f"{table.sheet or ''}|{config.checks.sheet if config.checks else ''}"
     reqset = RequirementSet(

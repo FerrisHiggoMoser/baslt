@@ -392,6 +392,7 @@ def init_template(output: str | Path, *, template: str = "generic", mapping_outp
     return {
         "status": "pass",
         "template": template,
+        "examples_active": examples,
         "requirements": str(output),
         "mapping": str(mapping_path) if mapping_path is not None else None,
         "rows": len(rows),

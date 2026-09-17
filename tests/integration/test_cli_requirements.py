@@ -82,3 +82,19 @@ def test_requirements_commands_stay_light():
             "print(sorted(m for m in ('numpy', 'yaml', 'h5py', 'scipy') if m in sys.modules))")
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True).stdout
     assert out.strip() == "[]"
+
+
+def test_a_template_for_a_run_checks_nothing_until_rows_are_approved(tmp_path, capsys):
+    run = tmp_path / "run.csv"
+    run.write_text("t [s],q [Pa]\n0,1\n1,2\n", encoding="utf-8")
+    out = tmp_path / "reqs.xlsx"
+    assert main(["requirements", "init", "-o", str(out), "--source", str(run)]) == 0
+    assert "Status 'example' and are not checked" in capsys.readouterr().out
+    assert main(["requirements", "lint", str(out), "--source", str(run)]) == 0
+    text = capsys.readouterr().out
+    assert "no requirement to check: 21 rows were left out by requirements.where (Status: approved)" in text
+    assert main(["check", str(run), "-r", str(out), "-o", str(tmp_path / "o")]) == 3
+    assert "no requirement to check" in capsys.readouterr().err
+    assert not (tmp_path / "o").exists()
+    assert main(["check", str(run), "-r", str(out), "--only", "NOPE", "-o", str(tmp_path / "o")]) == 3
+    assert "--only kept NOPE" in capsys.readouterr().err

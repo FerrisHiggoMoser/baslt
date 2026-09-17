@@ -39,8 +39,11 @@ print(result.status, result.exit_code, result.outputs["report"])
 lint = baslt.lint_requirements("reqs.xlsx", source="run.h5")
 ```
 
-The example files `examples/rocket_requirements.csv` and `examples/rocket_mapping.yaml` (and `.json`) check the
-simulated ascent of `examples/rocket_sim.py`; `examples/rocket_batch.py` writes a batch with a parameter table.
+The template's example rows check the simulated ascent of `examples/rocket_sim.py`. With `--source`, the Signals
+sheet lists your run's signals instead and the example rows get Status `example`, so nothing is checked until you
+point a row's Check at your signals and set its Status to `approved`; lint says when no row is selected. The same
+examples are in `examples/rocket_requirements.csv` with `examples/rocket_mapping.yaml` (and `.json`), and
+`examples/rocket_batch.py` writes a batch with a parameter table.
 
 ## The requirements table
 
@@ -451,7 +454,7 @@ issue of the run; the check itself stands.
 | 0 | Every requirement passed or warned (with `--fail-on warn`, only passed), or `--fail-on none` |
 | 1 | A requirement failed in some run (or warned, with `--fail-on warn`) |
 | 2 | An internal error |
-| 3 | The requirements, mapping or options could not be used, or nothing failed but a requirement or run ended in ERROR |
+| 3 | The requirements, mapping or options could not be used, the table selects no requirement to check, or nothing failed but a requirement or run ended in ERROR |
 
 ## Limits of this version
 

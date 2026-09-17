@@ -173,7 +173,11 @@ def _requirements(args):
         result = api.init_template(args.output, template=args.template, mapping_output=args.mapping_output,
                                    source=args.source, force=args.force)
         written = " and ".join(result["written"])
-        _emit(args, result, f"Wrote {written}: {result['rows']} example rows, {result['signals']} signals")
+        message = f"Wrote {written}: {result['rows']} example rows, {result['signals']} signals"
+        if not result["examples_active"]:
+            message += (f" from {args.source}.\nThe example rows have Status 'example' and are not checked: point "
+                        "their Check at your signals (Signals sheet) and set Status to approved.")
+        _emit(args, result, message)
         return 0
     result = api.lint(args.requirements, mapping=args.mapping, source=args.source, params=args.params,
                       only=args.only)
