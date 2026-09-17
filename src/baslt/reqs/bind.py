@@ -16,7 +16,7 @@ from ..units import Quantity
 from .config import Config
 from .events import split_reference
 from .expr import UNKNOWN, B, Binder, BoundExpr, ExprError, TypeInfo
-from .model import AGGREGATE_KINDS, BOUND_KINDS, Bound, Case, LimitSpec, Requirement, RequirementSet
+from .model import AGGREGATE_KINDS, BOUND_KINDS, Bound, Case, Requirement, RequirementSet
 from .units_ext import UnitsError
 
 __all__ = ["BoundCase", "BoundLimit", "BoundRequirement", "BoundSet", "bind_requirements", "lint_against_source",
@@ -224,7 +224,7 @@ class _RequirementBinder:
             return "bound"
         if kind == "assert":
             if t.dtype != "bool" or t.shape != "series":
-                raise ExprError(f"an assert check needs a condition on signals, such as mode == 'COAST'")
+                raise ExprError("an assert check needs a condition on signals, such as mode == 'COAST'")
             return "assert"
         if kind == "duration":
             if t.dtype != "bool" or t.shape != "series":

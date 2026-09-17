@@ -74,12 +74,19 @@ SKIN_GAP_END = 45.35            # s
 
 
 def simulate(seed: int = 7, duration: float = 120.0, rate: float = 1000.0,
-             anomaly: str | None = None) -> dict[str, np.ndarray]:
-    """Simulate an ascent sampled at `rate` Hz from 0 to `duration` s (both ends included)."""
+             anomaly: str | None = None, *, thrust_scale: float = 1.0,
+             payload: float = 0.0) -> dict[str, np.ndarray]:
+    """Simulate an ascent sampled at `rate` Hz from 0 to `duration` s (both ends included).
+
+    `thrust_scale` multiplies the engine thrust and `payload` (kg) adds to the lift-off mass; the defaults give the
+    nominal vehicle.
+    """
     if anomaly is not None and anomaly not in ANOMALIES:
         raise ValueError(f"unknown anomaly {anomaly!r}; expected one of {', '.join(ANOMALIES)}")
     if not duration > 0 or not rate > 0:
         raise ValueError("duration and rate must be positive")
+    if not thrust_scale > 0 or not payload >= 0:
+        raise ValueError("thrust_scale must be positive and payload not negative")
     n = int(round(duration * rate)) + 1
     t = np.arange(n, dtype=np.float64) / rate
     dt = 1.0 / rate
@@ -97,10 +104,10 @@ def simulate(seed: int = 7, duration: float = 120.0, rate: float = 1000.0,
     ramp = np.minimum(LIFTOFF_FRACTION + (1.0 - LIFTOFF_FRACTION) * t / RAMP_TIME, 1.0)
     vacuum = THRUST_SEA_LEVEL * (1.0 + THRUST_VACUUM_GAIN * (1.0 - np.exp(-t / 40.0)))
     shutdown = np.exp(-np.maximum(t - MECO_TIME, 0.0) / SHUTDOWN_TAU)
-    thrust = vacuum * np.where(burning, ramp, shutdown) * (1.0 + 0.002 * thrust_noise)
+    thrust = thrust_scale * vacuum * np.where(burning, ramp, shutdown) * (1.0 + 0.002 * thrust_noise)
 
     # Point-mass ascent along a pitch program in the x-z plane with a slight cross-range drift
-    mass = MASS_LIFTOFF - MASS_FLOW * np.minimum(t, MECO_TIME)
+    mass = MASS_LIFTOFF + payload - MASS_FLOW * np.minimum(t, MECO_TIME)
     w = np.clip((t - PITCH_START) / (MECO_TIME - PITCH_START), 0.0, 1.0)
     gamma = np.deg2rad(90.0 - PITCH_TOTAL * (3.0 * w**2 - 2.0 * w**3))
     accel = thrust / mass - G0 * np.sin(gamma)

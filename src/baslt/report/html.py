@@ -5,6 +5,8 @@ a multiple of 4, compressed with raw DEFLATE and base64-encoded. The page inflat
 `DecompressionStream("deflate-raw")`. A reference to an array is a small dict:
 
     {"o": byte offset, "n": count, "k": "f4"}                          float32 values
+    {"o": byte offset, "n": count, "k": "u1"}                          uint8 codes
+    {"o": byte offset, "n": count, "k": "q1", "lo": lo, "hi": hi}      uint8 steps between lo and hi, 255 = NaN
     {"o": byte offset, "n": count, "k": "u2", "lo": lo, "hi": hi}      uint16 steps between lo and hi, 65535 = NaN
 
 Scripts and styles are allowed by their SHA-256 hashes; nothing else may load, so the page works from a file and
@@ -73,6 +75,22 @@ class Packer:
     def float32(self, values) -> dict:
         array = np.ascontiguousarray(np.asarray(values, dtype="<f4"))
         return self._add(array.tobytes(), array.shape[0], "f4")
+
+    def uint8(self, codes) -> dict:
+        array = np.ascontiguousarray(np.asarray(codes, dtype=np.uint8))
+        return self._add(array.tobytes(), array.shape[0], "u1")
+
+    def uint8q(self, values, lo: float, hi: float) -> dict:
+        """Values quantized to 254 steps between lo and hi, 255 = NaN (for coarse overview lines)."""
+        x = np.asarray(values, dtype=np.float64)
+        finite = np.isfinite(x)
+        codes = np.full(x.shape[0], 255, dtype=np.uint8)
+        span = hi - lo
+        if span > 0 and np.isfinite(span):
+            codes[finite] = np.rint((np.clip(x[finite], lo, hi) - lo) / span * 254).astype(np.uint8)
+        else:
+            codes[finite] = 0
+        return self._add(codes.tobytes(), x.shape[0], "q1", lo=float(lo), hi=float(hi))
 
     def uint16(self, values, lo: float | None = None, hi: float | None = None) -> dict:
         """Values quantized to 65534 steps between lo and hi (their finite extremes by default)."""

@@ -87,7 +87,7 @@ def _build_parser() -> tuple[argparse.ArgumentParser, dict[str, Handler]]:
     check_parser.add_argument("-m", "--mapping", help="mapping file (.yaml, .json or .xlsx)")
     check_parser.add_argument("--params", help="run parameters table (one row per run)")
     check_parser.add_argument("-o", "--output", help="output folder")
-    check_parser.add_argument("--jobs", default="1", help="parallel runs: a number or auto")
+    check_parser.add_argument("--jobs", default="auto", help="processes for many runs: a number or auto")
     check_parser.add_argument("--resume", action="store_true", help="skip runs whose results are up to date")
     check_parser.add_argument("--fail-on", choices=("fail", "warn", "none"), default="fail")
     check_parser.add_argument("--pages", choices=("failed", "all", "none"), help="per-run report pages (batch)")
@@ -181,6 +181,10 @@ def _requirements(args):
     return result.exit_code
 
 
+def _print_progress(line: str) -> None:
+    print(line, file=sys.stderr, flush=True)
+
+
 def _check(args):
     from .errors import UsageError
     from .reqs import api
@@ -192,10 +196,12 @@ def _check(args):
         except ValueError:
             raise UsageError(f"--jobs takes a number or auto, got {jobs!r}") from None
     runs = args.runs[0] if len(args.runs) == 1 else list(args.runs)
+    progress = None if (args.json or args.quiet) else _print_progress
     result = api.check(runs, args.requirements, mapping=args.mapping, params=args.params, output=args.output,
                        fail_on=args.fail_on, only=args.only, xlsx=not args.no_xlsx, annotate=not args.no_annotate,
                        html=not args.no_html, pages=args.pages, jobs=jobs, resume=args.resume,
-                       archive=args.archive, max_size=args.max_size, hash=args.hash, show_all=args.all)
+                       archive=args.archive, max_size=args.max_size, hash=args.hash, show_all=args.all,
+                       progress=progress)
     _emit(args, result.to_json(), result.text)
     return result.exit_code
 

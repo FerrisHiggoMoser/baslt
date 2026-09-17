@@ -1,0 +1,40 @@
+.bar { display: block; border-radius: 2px; background: var(--na-bg); }
+.bar-pass { fill: var(--pass); } .bar-warn { fill: var(--warn); } .bar-fail { fill: var(--fail); }
+.bar-na { fill: var(--na); } .bar-error { fill: var(--error); }
+.scroll table.reqs { min-width: 1020px; }
+table.reqs tr.pick { cursor: pointer; }
+table.reqs tr.pick:hover, table.reqs tr.pick.chosen { background: var(--panel); }
+table.reqs td.id { white-space: nowrap; font-weight: 600; }
+.matrix { position: relative; overflow-x: auto; }
+.matrix canvas { display: block; width: 100%; cursor: pointer; }
+.selection { min-height: 1.4em; margin: 6px 0 0; }
+.sentence { margin: 4px 0 8px; font-weight: 600; }
+.pair { display: grid; grid-template-columns: 3fr 2fr; gap: 16px; }
+.plot.overlay canvas, .plot.scatter canvas { height: 280px; }
+.plot.scatter canvas { cursor: pointer; }
+.tools select, .tools label { font: inherit; color: var(--fg); }
+.tools select {
+  max-width: 100%; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg);
+}
+.vtable { border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.vhead, .vrow {
+  display: grid; gap: 8px; align-items: center; padding: 0 10px; height: 28px;
+  grid-template-columns: var(--run-columns, minmax(9em, 2fr) 5.5em repeat(3, 4em));
+}
+.vhead { background: var(--panel); color: var(--muted); font-size: 12.5px; font-weight: 600; }
+.vhead button {
+  border: 0; background: none; color: inherit; font: inherit; padding: 0; cursor: pointer; text-align: left;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.vhead button.num { text-align: right; }
+.vhead button[data-dir]::after { content: " \2193"; }
+.vhead button[data-dir="desc"]::after { content: " \2191"; }
+.vbody { position: relative; height: 420px; overflow-y: auto; overflow-x: hidden; }
+.vspace { position: relative; }
+.vrow { position: absolute; left: 0; right: 0; border-top: 1px solid var(--line); }
+.vrow > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 760px) {
+  .pair { grid-template-columns: 1fr; }
+  .vhead, .vrow { grid-template-columns: minmax(8em, 1fr) 5.5em 3.5em; }
+  .vhead > :nth-child(n+4), .vrow > :nth-child(n+4) { display: none; }
+}

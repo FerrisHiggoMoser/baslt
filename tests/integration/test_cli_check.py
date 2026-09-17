@@ -136,8 +136,8 @@ def test_problems_before_checking(files, capsys):
     text = capsys.readouterr().out
     assert "ERROR    the run could not be checked: " in text
     assert "1 requirements, 0 not covered" in text and "reqs.checked.csv" not in text
-    assert main(["check", str(run), str(run), "-r", str(table)]) == 3  # usage problems exit with 3 too
-    assert "several runs" in capsys.readouterr().err
+    assert main(["check", str(folder / "none*.csv"), "-r", str(table)]) == 3  # usage problems exit with 3 too
+    assert "no run files match" in capsys.readouterr().err
     assert main(["check", str(run), "-r", str(table), "--jobs", "many"]) == 3
     assert "--jobs takes a number or auto" in capsys.readouterr().err
     assert main(["check", str(run), "-r", str(table), "--archive"]) == 3

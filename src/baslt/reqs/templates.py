@@ -376,12 +376,10 @@ def init_template(output: str | Path, *, template: str = "generic", mapping_outp
         write_atomic(output, buffer.getvalue().encode("utf-8"))
         written.append(output)
         if mapping_output is None:
-            try:
-                import yaml  # noqa: F401
+            import importlib.util
 
-                mapping_output = output.with_suffix(".mapping.yaml")
-            except ImportError:
-                mapping_output = output.with_suffix(".mapping.json")
+            has_yaml = importlib.util.find_spec("yaml") is not None
+            mapping_output = output.with_suffix(".mapping.yaml" if has_yaml else ".mapping.json")
         mapping_path = Path(mapping_output)
     if mapping_path is not None:
         fmt = "json" if mapping_path.suffix.lower() == ".json" else "yaml"

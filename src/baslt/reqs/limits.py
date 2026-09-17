@@ -30,7 +30,7 @@ _UPPER_WORDS = ("not to exceed", "shall not exceed", "not exceed", "no more than
 _LOWER_WORDS = ("no less than", "at least", "minimum", "min", "above", "over", "greater than or equal to")
 _OPERATORS = {"<=": "upper", "=<": "upper", "<": "upper_strict", ">=": "lower", "=>": "lower", ">": "lower_strict",
               "==": "equal", "!=": "not_equal", "<>": "not_equal"}
-_BRACKET_RE = re.compile(rf"^([\[(])\s*(.+?)\s*[,;]\s*(.+?)\s*([\])])\s*(.*)$")
+_BRACKET_RE = re.compile(r"^([\[(])\s*(.+?)\s*[,;]\s*(.+?)\s*([\])])\s*(.*)$")
 _BETWEEN_RE = re.compile(r"^between\s+(.+?)\s+and\s+(.+)$", re.IGNORECASE)
 _DOTS_RE = re.compile(rf"^({NUMBER})\s*(\S*?)\s*(?:\.\.|…|\bto\b|–|—)\s*({NUMBER})\s*(.*)$", re.IGNORECASE)
 _PM_RE = re.compile(rf"^({NUMBER})?\s*(?:±|\+/-|\+-)\s*({NUMBER})\s*(.*)$")
@@ -76,7 +76,7 @@ def _rhs(text: str, unit: str | None, units: UnitTable, inclusive: bool) -> Boun
         return Bound(expr=text[1:].strip(), inclusive=inclusive)
     try:
         return Bound(quantity=_quantity(text, unit, units), inclusive=inclusive)
-    except UnitsError as exc:
+    except UnitsError:
         if re.fullmatch(rf"{NUMBER}(\s*\S+)?", text):  # a number with a bad unit is not an expression
             raise
         return Bound(expr=text, inclusive=inclusive)  # anything else is an expression such as 0.9 * param.q

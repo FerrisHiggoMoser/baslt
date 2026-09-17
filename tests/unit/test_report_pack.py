@@ -52,6 +52,19 @@ def test_arrays_round_trip_through_the_blob():
         assert hashlib.sha256(chunk).hexdigest() == digest
 
 
+def test_coarse_codes():
+    packer = Packer()
+    ref = packer.uint8q([0.0, 5.0, np.nan, 20.0, 10.0], 0.0, 10.0)
+    flat = packer.uint8q([3.0], 3.0, 3.0)
+    data = unpack(packer.blob())
+    codes = np.frombuffer(data, dtype=np.uint8, count=5, offset=ref["o"])
+    assert codes.tolist() == [0, 127, 255, 254, 254]  # values beyond hi are clipped
+    assert (ref["k"], ref["lo"], ref["hi"]) == ("q1", 0.0, 10.0)
+    assert np.frombuffer(data, dtype=np.uint8, count=1, offset=flat["o"]).tolist() == [0]
+    small = packer.uint8([1, 2, 255])
+    assert small["k"] == "u1" and unpack(packer.blob())[small["o"]:small["o"] + 3] == bytes([1, 2, 255])
+
+
 def test_quantization_error_is_bounded():
     rng = np.random.default_rng(3)
     x = rng.normal(0, 1e5, 2000)

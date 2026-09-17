@@ -47,16 +47,22 @@ class CheckResult:
     status: str
     exit_code: int
     outputs: dict[str, Path] = field(default_factory=dict)
-    runs: list = field(default_factory=list)
+    runs: list = field(default_factory=list)  # RunResult of a single run
     counts: dict = field(default_factory=dict)
     text: str = ""
+    batch: object = None  # reqs.aggregate.BatchSummary of several runs
 
     def to_json(self) -> dict:
-        return {
+        out = {
             "status": self.status, "exit_code": self.exit_code, "counts": self.counts,
             "outputs": {key: str(path) for key, path in self.outputs.items()},
             "runs": [run.to_json(with_results=len(self.runs) == 1) for run in self.runs],
         }
+        if self.batch is not None:
+            data = self.batch.to_json()
+            out["runs"] = data["runs"]
+            out["requirements"] = data["requirements"]
+        return out
 
 
 def _params_table(params, config, source) -> dict:
@@ -86,12 +92,16 @@ def _exit_code(runs, fail_on: str) -> int:
 def check(runs, requirements: str | Path, *, mapping: str | Path | Mapping | None = None, params=None,
           output: str | Path | None = None, fail_on: str = "fail", only: Sequence[str] | None = None,
           xlsx: bool = True, annotate: bool = True, html: bool = True, pages: str | None = None,
-          jobs: int | str = 1, resume: bool = False, archive: bool = False, max_size=None,
-          hash: str = "sampled", show_all: bool = False) -> CheckResult:
+          jobs: int | str = "auto", resume: bool = False, archive: bool = False, max_size=None,
+          hash: str = "sampled", show_all: bool = False, progress=None, _worker=None,
+          _context: str | None = None) -> CheckResult:
     """Check one run (a path or in-memory arrays) or many runs against a requirements table.
 
-    Writes results to `output` (a folder; by default `<run>.check` next to a single run file, nothing for
-    in-memory data) and returns the verdicts with the exit code the command line would use.
+    Many runs are a list of paths, a folder or a glob pattern; they are checked in `jobs` processes and summed
+    up in a dashboard. Writes results to `output` (a folder; by default `<run>.check` next to a single run file or
+    `<folder>.check` next to the runs' folder, nothing for in-memory data) and returns the verdicts with the exit
+    code the command line would use. `progress` receives a line of text as runs finish. `_worker` and
+    `_context` replace the per-run function and the process start method (for tests).
     """
     from ..errors import UsageError
 
@@ -99,10 +109,15 @@ def check(runs, requirements: str | Path, *, mapping: str | Path | Mapping | Non
         raise UsageError("fail_on must be fail, warn or none")
     reqset = load(requirements, mapping=mapping, only=only)
     many = isinstance(runs, (list, tuple)) or (isinstance(runs, (str, Path)) and _is_batch(runs))
-    if many:
-        raise UsageError("checking several runs at once is not available yet; check one run at a time")
     if archive:
         raise UsageError("--archive is not available yet")
+    if many:
+        from .batch import check_batch
+
+        return check_batch(runs, reqset, requirements=requirements, mapping=mapping, only=only, params=params,
+                           output=output, fail_on=fail_on, xlsx=xlsx, annotate=annotate, html=html, pages=pages,
+                           jobs=jobs, resume=resume, hash=hash, show_all=show_all, progress=progress,
+                           worker=_worker, context=_context)
     return _check_single(runs, reqset, params=params, output=output, fail_on=fail_on, xlsx=xlsx,
                          annotate=annotate, html=html, archive=archive, max_size=max_size, hash=hash,
                          show_all=show_all)
