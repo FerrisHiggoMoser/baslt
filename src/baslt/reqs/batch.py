@@ -232,10 +232,12 @@ _REQSETS: dict[str, object] = {}
 def _reqset(task: dict):
     from .api import load
 
-    key = json.dumps([task["requirements"], task["mapping"], task["only"]], sort_keys=True, default=str)
+    key = json.dumps([task["requirements"], task["mapping"], task["overrides"], task["only"]], sort_keys=True,
+                     default=str)
     found = _REQSETS.get(key)
     if found is None:
-        found = load(task["requirements"], mapping=task["mapping"], only=task["only"])
+        found = load(task["requirements"], mapping=task["mapping"], overrides=task["overrides"],
+                     only=task["only"])
         _REQSETS.clear()
         _REQSETS[key] = found
     return found
@@ -361,12 +363,21 @@ class _Verdict:
 
 
 def _mapping_digest(mapping) -> str:
+    """One digest for however many mappings are laid over each other."""
     if mapping is None:
         return "none"
-    if isinstance(mapping, Mapping):
-        return hashlib.sha256(json.dumps(mapping, sort_keys=True, default=str).encode()).hexdigest()
-    path = Path(mapping)
-    return hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else str(path)
+    if isinstance(mapping, (str, Path, Mapping)):
+        layers = [mapping]
+    else:
+        layers = list(mapping)
+    parts = []
+    for layer in layers:
+        if isinstance(layer, Mapping):
+            parts.append(hashlib.sha256(json.dumps(layer, sort_keys=True, default=str).encode()).hexdigest())
+        else:
+            path = Path(layer)
+            parts.append(hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else str(path))
+    return hashlib.sha256("|".join(parts).encode()).hexdigest()
 
 
 def cache_key(task: dict, reqset, mapping_digest: str) -> str:
@@ -375,6 +386,7 @@ def cache_key(task: dict, reqset, mapping_digest: str) -> str:
     parts = {
         "baslt": __version__, "requirements": reqset.sha256, "mapping": mapping_digest, "only": task["only"],
         "params": task["params"], "path": str(path.resolve()), "size": stat.st_size if stat else None,
+        "overrides": task.get("overrides"),
         "mtime": stat.st_mtime_ns if stat else None, "hash": task["hash"],
         "archive": [bool(task.get("archive")), task.get("max_size")],
     }
@@ -465,7 +477,8 @@ def run_pool(tasks: Sequence[dict], jobs: int, on_done: Callable[[dict, dict], N
 
 def check_batch(runs, reqset, *, requirements, mapping=None, only=None, params=None, output=None,
                 fail_on: str = "fail", xlsx: bool = True, annotate: bool = True, html: bool = True,
-                pages: str | None = None, jobs="auto", resume: bool = False, hash: str = "sampled",
+                overrides=None, pages: str | None = None, jobs="auto", resume: bool = False,
+                hash: str = "sampled",
                 show_all: bool = False, progress: Callable[[str], None] | None = None, archive: bool = False,
                 max_size=None,
                 context: str | None = None, worker: Callable[[dict], dict] | None = None):
@@ -496,7 +509,7 @@ def check_batch(runs, reqset, *, requirements, mapping=None, only=None, params=N
         elif table is not None:
             row = row_for(table, path, config, run_id=rid, root=root)
         task = {"index": index, "id": rid, "path": str(path), "params": row, "requirements": str(requirements),
-                "mapping": mapping if isinstance(mapping, Mapping) or mapping is None else str(mapping),
+                "mapping": _portable(mapping), "overrides": dict(overrides) if overrides else None,
                 "only": list(only) if only else None, "output": str(output), "pages": pages if html else "none",
                 "hash": hash, "archive": bool(archive), "max_size": None if max_size is None else str(max_size)}
         task["key"] = cache_key(task, reqset, mapping_digest)
@@ -557,6 +570,15 @@ def check_batch(runs, reqset, *, requirements, mapping=None, only=None, params=N
     result.batch = summary
     result.text = summary.render(outputs, show_all=show_all)
     return result
+
+
+def _portable(mapping):
+    """The mappings as something a worker process can be handed: paths as text, dicts as they are."""
+    if mapping is None or isinstance(mapping, Mapping):
+        return mapping
+    if isinstance(mapping, (str, Path)):
+        return str(mapping)
+    return [layer if isinstance(layer, Mapping) else str(layer) for layer in mapping]
 
 
 def _index_line(summary: dict) -> dict:

@@ -401,6 +401,54 @@ sheet.
   an ID column and the check columns; it is joined by id. Requirements without a check are reported as not covered,
   and checks without a requirement are listed.
 
+## One table, many builds
+
+Requirements outlive a vehicle build; limits, signal names and even file formats do not. Four things vary
+independently, so nothing has to be copied per build:
+
+**A limit that differs per build** is another row with the same ID and an `Applies to` over the run's parameters:
+
+```
+ID      Title              Check  Type   Limit  Unit  Applies to      Case
+LV-001  Max dynamic press  q      upper  70     kPa   build == 'B2'   build 2
+LV-001                     q      upper  76     kPa                   later builds
+```
+
+The first row whose `Applies to` holds is used, so the last row without one is the default. The same works for
+tolerances, warning margins and expected counts. A limit can also be computed from a parameter
+(`<= 0.9 * param.q_design`) or read from a curve, which often removes the extra rows entirely.
+
+**Names and units that differ per build** go in a mapping of their own, laid over the base:
+
+```sh
+baslt check run.h5 -r reqs.xlsx -m mapping/base.yaml -m mapping/B3.yaml
+```
+
+`B3.yaml` holds only what changed — a renamed signal, another unit, a different event threshold. Later files win,
+key by key, and a workbook's own config sheets sit underneath them all.
+
+**One-off changes** need no file: `--set` writes a single setting, and wins over every mapping.
+
+```sh
+baslt check run.h5 -r reqs.xlsx -m mapping/base.yaml --set defaults.on_gap=fail --set report.title="B3 hot fire"
+```
+
+**A batch of mixed builds** needs no separate runs: put the build in the parameter table and let `Applies to`
+choose per run.
+
+```
+run,build,payload
+run_0001,B2,1500
+run_0002,B3,900
+```
+
+```sh
+baslt check runs/ -r reqs.xlsx -m mapping/base.yaml --params runs.csv
+```
+
+The dashboard then filters and plots by `build` like any other parameter. Which mapping files and settings were
+used is part of what `--resume` compares, so changing a build file rechecks the runs it affects.
+
 ## Run parameters
 
 Parameters describe a run: its payload, its configuration, a dispersion's seed. They select cases (`Applies to`),

@@ -76,7 +76,10 @@ def _build_parser() -> tuple[argparse.ArgumentParser, dict[str, Handler]]:
     _common(template_parser)
     lint_parser = requirement_actions.add_parser("lint", help="Report every problem in a requirements table")
     lint_parser.add_argument("requirements")
-    lint_parser.add_argument("-m", "--mapping", help="mapping file (.yaml, .json or .xlsx)")
+    lint_parser.add_argument("-m", "--mapping", action="append", metavar="MAP",
+                             help="mapping file (.yaml or .json); repeat to lay one over another")
+    lint_parser.add_argument("--set", action="append", dest="settings", metavar="KEY=VALUE",
+                             help="change one mapping setting, e.g. --set defaults.on_gap=fail")
     lint_parser.add_argument("--source", help="also resolve names against this run")
     lint_parser.add_argument("--params", help="run parameters table (for Applies to)")
     lint_parser.add_argument("--only", action="append", help="lint only these requirement IDs (glob)")
@@ -84,7 +87,10 @@ def _build_parser() -> tuple[argparse.ArgumentParser, dict[str, Handler]]:
     check_parser = commands.add_parser("check", help="Check runs against a requirements table")
     check_parser.add_argument("runs", nargs="+", help="run files, folders or glob patterns")
     check_parser.add_argument("-r", "--requirements", required=True, help="requirements table (.xlsx or .csv)")
-    check_parser.add_argument("-m", "--mapping", help="mapping file (.yaml, .json or .xlsx)")
+    check_parser.add_argument("-m", "--mapping", action="append", metavar="MAP",
+                              help="mapping file (.yaml or .json); repeat to lay one over another")
+    check_parser.add_argument("--set", action="append", dest="settings", metavar="KEY=VALUE",
+                              help="change one mapping setting, e.g. --set defaults.on_gap=fail")
     check_parser.add_argument("--params", help="run parameters table (one row per run)")
     check_parser.add_argument("-o", "--output", help="output folder")
     check_parser.add_argument("--jobs", default="auto", help="processes for many runs: a number or auto")
@@ -184,9 +190,16 @@ def _requirements(args):
         _emit(args, result, message)
         return 0
     result = api.lint(args.requirements, mapping=args.mapping, source=args.source, params=args.params,
-                      only=args.only)
+                      overrides=_settings(args), only=args.only)
     _emit(args, result.to_json(), result.render())
     return result.exit_code
+
+
+def _settings(args) -> dict | None:
+    """--set pairs as a mapping that wins over the mapping files."""
+    from .reqs.config import settings
+
+    return settings(getattr(args, "settings", None) or []) or None
 
 
 def _print_progress(line: str) -> None:
@@ -205,7 +218,8 @@ def _check(args):
             raise UsageError(f"--jobs takes a number or auto, got {jobs!r}") from None
     runs = args.runs[0] if len(args.runs) == 1 else list(args.runs)
     progress = None if (args.json or args.quiet) else _print_progress
-    result = api.check(runs, args.requirements, mapping=args.mapping, params=args.params, output=args.output,
+    result = api.check(runs, args.requirements, mapping=args.mapping, overrides=_settings(args),
+                       params=args.params, output=args.output,
                        fail_on=args.fail_on, only=args.only, xlsx=not args.no_xlsx, annotate=not args.no_annotate,
                        html=not args.no_html, pages=args.pages, jobs=jobs, resume=args.resume,
                        archive=args.archive, max_size=args.max_size, hash=args.hash, show_all=args.all,

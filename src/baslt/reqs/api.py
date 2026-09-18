@@ -14,9 +14,13 @@ from .model import RequirementSet
 __all__ = ["CheckResult", "check", "init_template", "lint", "load"]
 
 
-def load(requirements: str | Path, *, mapping: str | Path | Mapping | None = None,
-         overrides: Mapping | None = None, only: Sequence[str] | None = None) -> RequirementSet:
-    """Read a requirements table with its mapping (config sheets in the workbook, then the mapping file)."""
+def load(requirements: str | Path, *, mapping=None, overrides: Mapping | None = None,
+         only: Sequence[str] | None = None) -> RequirementSet:
+    """Read a requirements table with its mapping (config sheets in the workbook, then the mapping files).
+
+    `mapping` is one mapping or several laid over each other, so a build's own file need only carry what it
+    changes; `overrides` wins over all of them.
+    """
     from .load import load_requirements
 
     path = Path(requirements)
@@ -24,12 +28,12 @@ def load(requirements: str | Path, *, mapping: str | Path | Mapping | None = Non
     return load_requirements(path, config, only=only)
 
 
-def lint(requirements: str | Path, *, mapping: str | Path | Mapping | None = None, source=None, params=None,
+def lint(requirements: str | Path, *, mapping=None, source=None, params=None, overrides: Mapping | None = None,
          only: Sequence[str] | None = None):
     """Check a requirements table without running anything; with `source`, also resolve its names on that run."""
     from .lint import lint_static
 
-    reqset = load(requirements, mapping=mapping, only=only)
+    reqset = load(requirements, mapping=mapping, overrides=overrides, only=only)
     result = lint_static(reqset)
     if source is not None:
         from .bind import lint_against_source
@@ -89,7 +93,7 @@ def _exit_code(runs, fail_on: str) -> int:
     return 0
 
 
-def check(runs, requirements: str | Path, *, mapping: str | Path | Mapping | None = None, params=None,
+def check(runs, requirements: str | Path, *, mapping=None, overrides: Mapping | None = None, params=None,
           output: str | Path | None = None, fail_on: str = "fail", only: Sequence[str] | None = None,
           xlsx: bool = True, annotate: bool = True, html: bool = True, pages: str | None = None,
           jobs: int | str = "auto", resume: bool = False, archive: bool = False, max_size=None,
@@ -114,7 +118,7 @@ def check(runs, requirements: str | Path, *, mapping: str | Path | Mapping | Non
             parse_bytes(max_size, path="max_size")
         except BasltError as exc:
             raise UsageError(str(exc)) from None
-    reqset = load(requirements, mapping=mapping, only=only)
+    reqset = load(requirements, mapping=mapping, overrides=overrides, only=only)
     if not reqset.covered:
         from ..errors import RequirementsError
 
@@ -124,7 +128,8 @@ def check(runs, requirements: str | Path, *, mapping: str | Path | Mapping | Non
     if many:
         from .batch import check_batch
 
-        return check_batch(runs, reqset, requirements=requirements, mapping=mapping, only=only, params=params,
+        return check_batch(runs, reqset, requirements=requirements, mapping=mapping, overrides=overrides,
+                           only=only, params=params,
                            output=output, fail_on=fail_on, xlsx=xlsx, annotate=annotate, html=html, pages=pages,
                            jobs=jobs, resume=resume, hash=hash, show_all=show_all, progress=progress,
                            archive=archive, max_size=max_size, worker=_worker, context=_context)

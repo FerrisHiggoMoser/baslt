@@ -72,7 +72,8 @@ thread per worker. `OUTDIR` receives `index.jsonl` (one summary per run, appende
 ## `baslt check`
 
 ```
-baslt check RUN... -r REQUIREMENTS [-m MAPPING] [--params TABLE] [-o OUT] [--jobs auto|N] [--resume]
+baslt check RUN... -r REQUIREMENTS [-m MAP]... [--set KEY=VALUE]... [--params TABLE] [-o OUT] [--jobs auto|N]
+            [--resume]
             [--fail-on fail|warn|none] [--pages failed|all|none] [--only ID] [--no-html] [--no-xlsx]
             [--no-annotate] [--archive [--max-size SIZE]] [--hash sampled|full|none] [--all]
 ```
@@ -92,7 +93,9 @@ VERDICT  ID      TITLE                 WORST      LIMIT      MARGIN             
 FAIL     LV-001  Max dynamic pressure  72.66 kPa  <= 70 kPa  -2.66 kPa (-3.8 %)  T+60.953 s  ascent, high_q; 56.0 s after pitch_start
 ```
 
-`-m` gives the mapping (YAML or JSON); config sheets inside the workbook work too. `--params` is a table with one
+`-m` gives a mapping (YAML or JSON) and may be repeated: later files are laid over earlier ones, key by key, so a
+vehicle build's file need only carry what it changes. `--set key=value` (repeatable) changes one setting and wins
+over the files. Config sheets inside the workbook sit underneath both. `--params` is a table with one
 row per run. `--only` (repeatable, globs) checks a subset of ids. `--archive` also compiles each run to a `.baslt`
 artifact protecting what the requirements check; `--max-size` is its budget. `--hash` sets how the run file is
 fingerprinted in the results.
@@ -116,7 +119,7 @@ export with verification fields, a `where` filter and `write_back`.
 ## `baslt requirements lint`
 
 ```
-baslt requirements lint REQUIREMENTS [-m MAPPING] [--source RUN] [--params TABLE] [--only ID]
+baslt requirements lint REQUIREMENTS [-m MAP]... [--set KEY=VALUE]... [--source RUN] [--params TABLE] [--only ID]
 ```
 
 Reads the table and mapping and reports every problem with its cell (`reqs.xlsx:Requirements!E12`): unknown

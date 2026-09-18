@@ -74,3 +74,14 @@ def test_a_damaged_record_is_rechecked(tmp_path):
     check(runs, table, params=params, output=out, jobs=1)
     (out / "runs" / "r1.json").write_text("{not json", encoding="utf-8")
     assert cached(check(runs, table, params=params, output=out, jobs=1, resume=True)) == ["r2", "r3"]
+
+
+def test_changed_settings_are_rechecked(tmp_path):
+    runs, table, params = write_batch(tmp_path, PEAKS)
+    out = tmp_path / "out"
+    check(runs, table, params=params, output=out, jobs=1)
+    same = check(runs, table, params=params, output=out, jobs=1, resume=True)
+    assert len(cached(same)) == 3
+    changed = check(runs, table, params=params, output=out, jobs=1, resume=True,
+                    overrides={"defaults": {"on_gap": "fail"}})
+    assert cached(changed) == []  # the settings are part of what makes a result up to date

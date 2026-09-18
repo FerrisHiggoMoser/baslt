@@ -182,3 +182,39 @@ def test_lint_against_a_run(files, capsys):
     assert "ERROR    B" in text and "unknown name 'y'" in text
     assert "ERROR    C" in text and "unknown run parameter 'payload'" in text
     assert "    D " not in text
+
+
+def test_mappings_are_laid_over_each_other_per_build(files, capsys):
+    """One set of requirements, one base mapping, and a small file per vehicle build."""
+    run, folder = files
+    table = write_rows(folder / "reqs.csv", [{"id": "A", "check": "x", "limit": "<= 10 m"},
+                                             {"id": "B", "check": "x", "limit": "<= 6 m"}])
+    base = folder / "base.json"
+    base.write_text('{"version": 1, "signals": {"x": {"path": "x", "unit": "m"}}, '
+                    '"defaults": {"margin": "0.1 m"}}', encoding="utf-8")
+    build = folder / "build3.json"
+    build.write_text('{"defaults": {"margin": "2 m"}}', encoding="utf-8")
+
+    def counts(*options):
+        assert main(["check", str(run), "-r", str(table), "-o", str(folder / "o"), "--json", *options]) == 0
+        return json.loads(capsys.readouterr().out)["runs"][0]["counts"]
+
+    assert counts("-m", str(base))["warn"] == 0
+    assert counts("-m", str(base), "-m", str(build))["warn"] == 1  # the build's wider margin wins
+    assert counts("-m", str(base), "--set", "defaults.margin=2 m")["warn"] == 1
+    assert counts("-m", str(base), "-m", str(build), "--set", "defaults.margin=0.1 m")["warn"] == 0
+    assert main(["check", str(run), "-r", str(table), "--set", "defaults.on_gap", "-o", str(folder / "o")]) == 3
+    assert "--set takes key=value" in capsys.readouterr().err
+
+
+def test_lint_takes_the_same_mappings(files, capsys):
+    run, folder = files
+    table = reqs(folder, "pass")
+    base = folder / "base.json"
+    base.write_text('{"version": 1, "signals": {"x": {"path": "x", "unit": "m"}}}', encoding="utf-8")
+    build = folder / "build.json"
+    build.write_text('{"signals": {"x": {"path": "nope", "unit": "m"}}}', encoding="utf-8")
+    assert main(["requirements", "lint", str(table), "-m", str(base), "--source", str(run)]) == 0
+    capsys.readouterr()
+    assert main(["requirements", "lint", str(table), "-m", str(base), "-m", str(build), "--source", str(run)]) == 3
+    assert "unknown signal 'nope'" in capsys.readouterr().out

@@ -38,6 +38,7 @@ __all__ = [
     "SignalAlias",
     "TimeSpec",
     "load_config",
+    "settings",
 ]
 
 FIELDS: tuple[str, ...] = (
@@ -232,6 +233,33 @@ class Config:
 # Sources
 
 
+def _layers(mapping) -> list:
+    """The mappings to lay over each other, in order."""
+    if mapping is None:
+        return []
+    if isinstance(mapping, (str, Path, Mapping)):
+        return [mapping]
+    return [layer for layer in mapping if layer is not None]
+
+
+def settings(pairs: Sequence[str]) -> dict:
+    """`--set defaults.on_gap=fail` pairs as a mapping: dotted keys become nested keys."""
+    out: dict = {}
+    for pair in pairs or ():
+        key, sep, value = str(pair).partition("=")
+        if not sep or not key.strip():
+            raise RequirementsError(f"--set takes key=value, got {pair!r}")
+        target = out
+        parts = [part for part in key.strip().split(".") if part]
+        for part in parts[:-1]:
+            node = target.setdefault(part, {})
+            if not isinstance(node, dict):
+                node = target[part] = {}
+            target = node
+        target[parts[-1]] = value.strip()
+    return out
+
+
 def deep_merge(base: Mapping, update: Mapping) -> dict:
     out = copy.deepcopy(dict(base))
     for key, value in update.items():
@@ -417,9 +445,13 @@ def config_from_workbook(path: Path) -> tuple[dict, dict[str, str]]:
     return data, locations
 
 
-def load_config(mapping: str | Path | Mapping | None = None, *, workbook: str | Path | None = None,
+def load_config(mapping: str | Path | Mapping | Sequence | None = None, *, workbook: str | Path | None = None,
                 overrides: Mapping | None = None) -> Config:
-    """Build the Config from its sources; raises RequirementsError listing every problem."""
+    """Build the Config from its sources; raises RequirementsError listing every problem.
+
+    `mapping` is one mapping (a file path or a dict) or several, laid one over the next: a base mapping and then
+    what a particular vehicle build changes. `overrides` (the command line's --set) wins over all of them.
+    """
     data: dict = {}
     locations: dict[str, str] = {}
     sources: list[str] = []
@@ -431,12 +463,12 @@ def load_config(mapping: str | Path | Mapping | None = None, *, workbook: str | 
             locations.update(sheet_locations)
             sources.append(f"{Path(workbook).name} (config sheets)")
         base = Path(workbook).resolve().parent
-    if mapping is not None:
-        if isinstance(mapping, Mapping):
-            data = deep_merge(data, mapping)
+    for layer in _layers(mapping):
+        if isinstance(layer, Mapping):
+            data = deep_merge(data, layer)
             sources.append("mapping")
         else:
-            path = Path(mapping)
+            path = Path(layer)
             file_data, file_locations = _read_mapping_file(path)
             data = deep_merge(data, file_data)
             locations.update(file_locations)
