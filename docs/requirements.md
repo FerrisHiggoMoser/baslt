@@ -204,6 +204,15 @@ units:
   counts: {dimension: dimensionless, factor: 1}
 ```
 
+### Reading run files
+
+The readers cope with what recording tools write: a units row under a CSV header (`s`, `m/s`), numbers with a
+decimal comma in files the comma does not split (`0,5` with `;` separators), comment lines before the header,
+columns for the elements of a vector (`pos_x`, `pos[0]`, `pos_1`, read as one vector under `pos`), one clock per
+group or per topic, and timestamps in other units (`time.unit: us`). A column of whole numbers is read as a state
+signal (held between samples, compared by label); give it `kind: continuous` in `signals:` when it is really a
+measurement. `baslt inspect RUN` shows what a reader made of a file, and says what it had to skip.
+
 ## Where and when
 
 A requirement is evaluated on the clock of the first signal its check reads, then its condition's and cases'.

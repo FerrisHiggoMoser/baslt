@@ -307,3 +307,38 @@ def test_sniff_rejects_binary_and_single_column():
     assert not CsvSource.sniff(Path("x"), b"")
     assert not CsvSource.sniff(Path("x"), b"justoneword\nanother\n")
     assert CsvSource.sniff(Path("x"), b"t,x\n0,1\n1,2\n")
+
+
+def test_a_units_row_under_the_header(tmp_path):
+    """Test benches often write the units on their own row (dSPACE, INCA, LabVIEW)."""
+    path = tmp_path / "bench.csv"
+    path.write_text("Time,Speed,Pressure,Mode\ns,m/s,Pa,-\n0,0,101300,IDLE\n0.1,1.2,101250,RUN\n", encoding="utf-8")
+    run = open_source(path).load()
+    assert run.meta.issues == ["the row under the header holds units, not data"]
+    assert [(s.name, s.unit, s.v.tolist()) for s in run.signals.values()] == [
+        ("Speed", "m/s", [0.0, 1.2]), ("Pressure", "Pa", [101300, 101250]), ("Mode", "-", [0, 1])]
+    assert run.signals["Mode"].labels == ["IDLE", "RUN"]  # text columns become states
+    assert run.signals["Speed"].t.tolist() == [0.0, 0.1]
+
+
+def test_rows_that_only_look_like_units(tmp_path):
+    """A first data row of text is data when nothing below it is a number, or when the row is blank."""
+    text_only = tmp_path / "text.csv"
+    text_only.write_text("Time,Mode\n0,IDLE\n1,RUN\n", encoding="utf-8")
+    assert open_source(text_only).load().signals["Mode"].labels == ["IDLE", "RUN"]
+    blank_first = tmp_path / "blank.csv"
+    blank_first.write_text("Time,Speed\n0,\n0.1,1.2\n", encoding="utf-8")
+    run = open_source(blank_first).load()
+    assert run.meta.issues == ["Speed: 1 empty cells read as NaN"]  # a gap, not a units row
+    assert str(run.signals["Speed"].v[0]) == "nan" and run.signals["Speed"].v[1] == 1.2
+
+
+def test_numbers_written_with_a_decimal_comma(tmp_path):
+    path = tmp_path / "de.csv"
+    path.write_text("Time;Speed;Label\n0,0;1,5;a\n0,1;2,25;b\n", encoding="utf-8")
+    run = open_source(path).load()
+    speed = run.signals["Speed"]
+    assert speed.v.tolist() == [1.5, 2.25] and speed.t.tolist() == [0.0, 0.1]
+    thousands = tmp_path / "thousands.csv"
+    thousands.write_text("Time;Count\n0;1,234,567\n1;2,345,678\n", encoding="utf-8")
+    assert open_source(thousands).load().signals["Count"].labels == ["1,234,567", "2,345,678"]  # not numbers

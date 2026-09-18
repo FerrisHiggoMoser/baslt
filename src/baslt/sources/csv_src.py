@@ -6,6 +6,9 @@
 - Time: ``time_hints[name]`` -> a column named t, time, timestamp or tout (case-insensitive, in that order of
   preference) -> ``global_time`` -> the first column. Every column named like a time column is a time signal, so
   none of them is listed as a data signal.
+- A row of units under the header (``s``, ``m/s``) is read as units, not data, when no cell in it is a number and
+  a later row has one. Numbers written with a decimal comma (``0,5``) in a file the comma does not split are read
+  as numbers.
 - Numbers load through ``np.loadtxt`` as float64. When a column will not parse as a number, the numeric columns are
   read again without it and it is read as text, so parsing stays inside numpy: empty cells in numeric columns
   become NaN and non-numeric columns become strings, which ``normalize_signal`` turns into enum codes. Only a file
@@ -47,6 +50,8 @@ TIME_COLUMN_NAMES: tuple[str, ...] = ("t", "time", "timestamp", "tout")
 SNIFF_LINES = 20
 
 _INT_RE = re.compile(r"^[+-]?\d+$")
+_DECIMAL_COMMA_RE = re.compile(r"^[+-]?\d+,\d+(?:[eE][+-]?\d+)?$")
+_SNIFF_CELLS = 50
 _FAILED_COLUMN_RE = re.compile(r"\brow \d+, column (\d+)\b")
 _MAX_EXACT_INT = 2.0**53
 
@@ -141,6 +146,15 @@ class CsvSource:
 
         issues: list[str] = []
         column_issues: dict[str, list[str]] = {}
+        later = [_split_fields(line, delimiter) for line in sample[1:4]]
+        if has_header and first_tokens is not None and _is_units_row(first_tokens, later):
+            for i, token in enumerate(first_tokens[:len(units)]):
+                text = token.strip().strip('"')
+                if text and not units[i]:
+                    units[i] = text
+            issues.append("the row under the header holds units, not data")
+            skip += 1
+            first_tokens = later[0] if later else None
         if first_tokens is None:
             columns = {name: np.empty(0, dtype=np.float64) for name in names}
         else:
@@ -371,6 +385,17 @@ class CsvSource:
 # --------------------------------------------------------------------------------------------------------------
 
 
+def _as_decimal_comma(values: np.ndarray, empty: np.ndarray) -> np.ndarray | None:
+    """Numbers written the European way (`0,5`), which only reach one cell when the delimiter is not a comma."""
+    filled = values[~empty]
+    if not filled.size or not all(_DECIMAL_COMMA_RE.match(str(value)) for value in filled[:_SNIFF_CELLS]):
+        return None
+    try:
+        return np.where(empty, "nan", np.char.replace(values, ",", ".")).astype(np.float64)
+    except ValueError:
+        return None
+
+
 def _is_number(text: str) -> bool:
     try:
         float(text.strip().strip('"'))
@@ -382,6 +407,15 @@ def _is_number(text: str) -> bool:
 def _looks_numeric(text: str) -> bool:
     """A number, or a blank cell: a missing value in a headerless file is not a column name."""
     return not text.strip() or _is_number(text)
+
+
+def _is_units_row(tokens: Sequence[str], later: Sequence[Sequence[str]]) -> bool:
+    """Whether the row under the header holds units (`s`, `m/s`) rather than data: no cell is a number here,
+    some cell is a number further down, and the row is not simply blank."""
+    filled = [token for token in tokens if token.strip()]
+    if not filled or any(_is_number(token) for token in filled):
+        return False
+    return any(_is_number(token) for row in later for token in row if token.strip())
 
 
 def _failed_column(exc: ValueError) -> int | None:
@@ -397,7 +431,11 @@ def _column_from_text(name: str, text: np.ndarray, column_issues: dict[str, list
     try:
         numbers = np.where(empty, "nan", values).astype(np.float64)
     except ValueError:
-        return values
+        decimal_comma = _as_decimal_comma(values, empty)
+        if decimal_comma is None:
+            return values
+        column_issues.setdefault(name, []).append("decimal commas read as decimal points")
+        numbers = decimal_comma
     n_empty = int(empty.sum())
     if n_empty:
         column_issues.setdefault(name, []).append(f"{name}: {n_empty} empty cells read as NaN")
