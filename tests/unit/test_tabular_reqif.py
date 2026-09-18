@@ -70,3 +70,29 @@ def test_a_polarion_export_as_requirements(tmp_path):
     assert first.title == "Max dynamic pressure" and first.check == "q" and first.covered
     assert first.loc.text == "export.reqif:LV-001"
     assert reqset.not_covered == ["LV-003"]
+
+
+def test_values_whose_definition_the_file_does_not_carry(tmp_path):
+    """Exports sometimes ship SPEC-OBJECTS without their SPEC-TYPES; their values must not be dropped."""
+    path = tmp_path / "loose.reqif"
+    path.write_text(
+        '<REQ-IF xmlns="http://www.omg.org/spec/ReqIF/20110401/reqif.xsd"><CORE-CONTENT><REQ-IF-CONTENT>'
+        '<SPEC-OBJECTS><SPEC-OBJECT IDENTIFIER="o1"><VALUES>'
+        '<ATTRIBUTE-VALUE-STRING THE-VALUE="LV-1"><DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>ad-id'
+        '</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION></ATTRIBUTE-VALUE-STRING>'
+        '<ATTRIBUTE-VALUE-XHTML><DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>ad-text'
+        '</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION><THE-VALUE><div>Some <b>text</b></div></THE-VALUE>'
+        '</ATTRIBUTE-VALUE-XHTML></VALUES></SPEC-OBJECT></SPEC-OBJECTS>'
+        "</REQ-IF-CONTENT></CORE-CONTENT></REQ-IF>", encoding="utf-8")
+    table = read_table(path)
+    assert table.row_texts(1) == ["ad-id", "ad-text", "ReqIF Type", "ReqIF Level"]
+    assert table.row_texts(2) == ["LV-1", "Some text", "", ""]
+
+
+def test_a_reqif_table_uses_its_first_row_as_the_header(tmp_path):
+    """Its columns are attribute names, which need not look like requirement fields."""
+    path = write_reqif(tmp_path / "export.reqif")
+    reqset = load_requirements(path, load_config({"requirements": {"columns": {"id": "ReqIF.ForeignID"}}}))
+    assert reqset.header_row == 1
+    assert [r.id for r in reqset.requirements] == ["LV-001", "LV-002", "LV-003", "LV-009"]
+    assert reqset.requirements[0].title == "Max dynamic pressure"  # ReqIF.Name

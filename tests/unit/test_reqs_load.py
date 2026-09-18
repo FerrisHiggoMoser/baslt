@@ -203,3 +203,16 @@ def test_a_filter_column_is_not_a_check_field(tmp_path):
     path.write_text("ID,Type,Check,Limit\nLV-1,upper,q,70\nLV-2,assert,q > 1,\n", encoding="utf-8")
     reqset = load(path, mapping={"requirements": {"where": {"Type": ["upper"]}, "columns": {"kind": "Type"}}})
     assert [(r.id, r.kind) for r in reqset.requirements] == [("LV-1", "upper")]
+
+
+def test_rows_that_all_share_one_id_are_reported(tmp_path):
+    path = tmp_path / "reqs.csv"
+    rows = "".join(f"same,Requirement {k},q,<= {k} kPa\n" for k in range(5))
+    path.write_text("ID,Title,Check,Limit\n" + rows, encoding="utf-8")
+    reqset = load(path)
+    assert len(reqset.requirements) == 1 and reqset.case_count == 5
+    warning = next(w for w in reqset.warnings if w.path == "requirements.columns.id")
+    assert "all 5 rows have the ID 'same'" in warning.message and warning.location == "reqs.csv:1:1"
+    few = tmp_path / "few.csv"
+    few.write_text("ID,Title,Check,Limit\nsame,A,q,<= 1 kPa\nsame,B,q,<= 2 kPa\n", encoding="utf-8")
+    assert not [w for w in load(few).warnings if w.path == "requirements.columns.id"]  # two cases are normal

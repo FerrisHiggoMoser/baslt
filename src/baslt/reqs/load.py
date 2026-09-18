@@ -29,6 +29,7 @@ from .units_ext import UnitsError
 __all__ = ["BUILTIN_KIND_WORDS", "find_header", "load_requirements", "map_columns", "resolve_file"]
 
 HEADER_SCAN_ROWS = 20
+MERGED_ROWS_WARNING = 3  # rows sharing one id above this are more likely a wrong id column than cases
 FIELD_PRIORITY: tuple[str, ...] = (
     "id", "check", "kind", "limit", "title", "unit", "when", "applies_to", "tolerance", "margin", "case", "count",
     "severity", "grid", "lower", "upper", "notes",
@@ -82,7 +83,9 @@ def _candidates(field: str, layout: Layout) -> list[str]:
 
 
 def find_header(table: Table, layout: Layout, *, header_row: int | None = None) -> int:
-    """The header row: the configured one, or the first row naming at least two known fields."""
+    """The header row: the configured one, row 1 of a ReqIF table, or the first row naming two known fields."""
+    if header_row is None and table.format == "reqif":
+        return 1  # the ReqIF reader writes the attribute names as row 1
     if header_row is not None:
         if header_row > table.n_rows:
             raise RequirementsError(f"{table.location(header_row)}: the header row is past the end of the table "
@@ -437,6 +440,12 @@ def load_requirements(path: str | Path, config: Config, *, only: Sequence[str] |
         case_columns = check_columns
     else:
         requirements = loader.group(table, rows, columns, header_row, passthrough)
+        if len(requirements) == 1 and len(rows) > MERGED_ROWS_WARNING:
+            loader.warnings.append(Issue(
+                path="requirements.columns.id",
+                message=f"all {len(rows)} rows have the ID {requirements[0].id!r}, so they were read as cases of "
+                        "one requirement; name the column that holds the ids under requirements.columns.id",
+                location=table.location(header_row, columns.get("id"))))
         case_rows = {}
         for r, cells in rows:
             rid = cells["id"].text.strip() if cells.get("id") is not None else ""

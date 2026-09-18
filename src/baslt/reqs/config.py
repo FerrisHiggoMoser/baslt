@@ -58,7 +58,8 @@ EVENT_NAME_RE = re.compile(r"^[^\s'\"#`()]+$")
 DEFAULT_SYNONYMS: dict[str, tuple[str, ...]] = {
     "id": ("id", "reqid", "requirementid", "requirement", "identifier", "key", "number", "no", "reqno",
            "reqifforeignid", "foreignid"),
-    "title": ("title", "name", "summary", "description", "requirementtitle", "text", "reqifname"),
+    "title": ("title", "name", "summary", "description", "requirementtitle", "text", "reqifname", "reqiftext",
+              "reqifchaptername"),
     "check": ("check", "signal", "expression", "verificationcheck", "measure", "parameter", "quantity"),
     "kind": ("type", "kind", "checktype", "limittype", "verificationkind", "checkkind"),
     "limit": ("limit", "requirementlimit", "verificationlimit", "threshold", "criterion", "criteria", "value"),

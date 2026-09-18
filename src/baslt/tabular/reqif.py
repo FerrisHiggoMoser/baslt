@@ -1,7 +1,8 @@
 """ReqIF (OMG Requirements Interchange Format) exports as tables, for Polarion, DOORS and other tools.
 
 One row per SPEC-OBJECT in the order of the specification hierarchy (objects no specification lists follow in file
-order), one column per attribute long name in the order the object types define them, plus `ReqIF Type` (the
+order), one column per attribute long name in the order the object types define them (an attribute whose definition
+the file does not carry keeps its identifier as the column name), plus `ReqIF Type` (the
 object's type, such as Heading or Requirement) and `ReqIF Level` (its depth in the hierarchy). XHTML values become
 plain text, enumerations their long names (joined with ", " when several are chosen), numbers and booleans their
 values. `.reqifz` archives are read from their first .reqif member.
@@ -162,6 +163,9 @@ def read_reqif(path: str | Path) -> Table:
                 values[name] = value.get("THE-VALUE", "")
         objects[ident] = {"values": values, "type": type_names.get(_ref(obj, "TYPE") or "", ""), "level": None}
         order.append(ident)
+        for name in values:  # an attribute whose definition the file does not declare still gets a column
+            if name not in columns:
+                columns.append(name)
 
     listed: list[str] = []
     specifications = _child(content, "SPECIFICATIONS")
@@ -182,7 +186,7 @@ def read_reqif(path: str | Path) -> Table:
 
     header = [*columns, *EXTRA_COLUMNS]
     rows: list[list[Cell | None]] = [[Cell(name, name, f"header/{name}") for name in header]]
-    labels = ["header"]
+    labels = ["header row"]
     for ident in listed:
         obj = objects[ident]
         row: list[Cell | None] = []
