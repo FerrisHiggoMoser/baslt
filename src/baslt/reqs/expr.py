@@ -474,18 +474,22 @@ class Binder:
         return self._signal(canonical, out, alias)
 
     def _components(self, ref: str) -> list[str] | None:
-        """`nav/position_x, _y, _z` (or `_1, _2, ...`) for `nav/position`, when all of them are signals."""
+        """The columns a vector was split into: `pos_x, _y, _z`, `pos_1, pos_2, ...` or `pos[0], pos[1], ...`."""
         base = ref.strip().lstrip("/")
         names = self.index.infos
         xyz = [f"{base}{suffix}" for suffix in ("_x", "_y", "_z")]
         if all(name in names for name in xyz):
             return xyz
-        for first in (1, 0):
-            numbered = []
-            while f"{base}_{first + len(numbered)}" in names:
-                numbered.append(f"{base}_{first + len(numbered)}")
-            if len(numbered) >= 2:
-                return numbered
+        for shape in ("{base}_{k}", "{base}[{k}]"):
+            runs = []
+            for first in (0, 1):  # 0-based (PX4, C) and 1-based (MATLAB) indexes
+                numbered: list[str] = []
+                while shape.format(base=base, k=first + len(numbered)) in names:
+                    numbered.append(shape.format(base=base, k=first + len(numbered)))
+                runs.append(numbered)
+            longest = max(runs, key=len)
+            if len(longest) >= 2:
+                return longest
         return None
 
     def _resolve(self, name: str, out: BoundExpr, role: str) -> B:

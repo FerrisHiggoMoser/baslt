@@ -23,7 +23,8 @@ __all__ = [
 WHITESPACE = "whitespace"
 DELIMITER_CANDIDATES: tuple[str, ...] = (",", ";", "\t")
 
-_UNIT_RE = re.compile(r"^(?P<name>.*?)\s*(?:\[(?P<bracket>[^\[\]]*)\]|\((?P<paren>[^()]*)\))\s*$")
+_UNIT_RE = re.compile(r"^(?P<name>.*?)(?P<gap>\s*)(?:\[(?P<bracket>[^\[\]]*)\]|\((?P<paren>[^()]*)\))\s*$")
+_INDEX_RE = re.compile(r"^\d+$")
 _UNIT_TOKEN_RE = re.compile(r"^(?:\[[^\[\]]*\]|\([^()]*\))$")
 
 
@@ -65,10 +66,13 @@ def sniff_delimiter(lines: Sequence[str]) -> str | None:
 
 
 def parse_header_field(raw: str) -> tuple[str, str | None]:
+    """`q [Pa]` and `q (Pa)` are a name and a unit; `gyro_rad[0]` is one name (the index of an array column)."""
     field = raw.strip().strip('"').strip()
     match = _UNIT_RE.match(field)
     if match is None:
         return field, None
     unit = match.group("bracket") if match.group("bracket") is not None else match.group("paren")
     unit = unit.strip() if unit is not None else None
+    if unit is not None and not match.group("gap") and _INDEX_RE.match(unit):
+        return field, None  # x[0], x[1]: array columns, whose index belongs to the name
     return match.group("name").strip(), unit or None

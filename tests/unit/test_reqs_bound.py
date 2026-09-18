@@ -250,6 +250,10 @@ def test_vectors_stored_as_one_column_per_component():
     mapping = {"signals": {"alt": {"expr": "`pos`.z", "unit": "m"}, "p": {"path": "pos", "unit": "km"}}}
     assert one({"check": "alt", "type": "max", "limit": ">= 5 m"}, split, mapping).value == 5.0
     assert one({"check": "norm(p)", "type": "max", "limit": "<= 6 km"}, split, mapping).unit == "km"
+    bracketed = {"g[0]": (T11, T11), "g[1]": (T11, -T11), "g[2]": (T11, T11 * 2)}
+    result = one({"check": "norm(g)", "limit": "<= 30"}, bracketed)
+    assert result.verdict == "pass" and result.value == pytest.approx(10 * 6 ** 0.5)
+    assert one({"check": "`g`.z", "limit": "<= 25"}, bracketed).value == 20.0
     numbered = {"v_1": (T11, T11), "v_2": (T11, -T11)}
     assert one({"check": "norm(v)", "limit": "<= 15"}, numbered).value == pytest.approx(10 * 2 ** 0.5)
     result = one({"check": "w", "limit": "<= 1"}, {"w_1": (T11, T11)})

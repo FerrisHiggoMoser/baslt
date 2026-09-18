@@ -48,3 +48,17 @@ def test_importing_the_helpers_does_not_load_numpy():
     code = "import sys, baslt.sources.csv_text; print('numpy' in sys.modules)"
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True).stdout
     assert out.strip() == "False"
+
+
+@pytest.mark.parametrize(("header", "expected"), [
+    ("q [Pa]", ("q", "Pa")),
+    ("q (Pa)", ("q", "Pa")),
+    ("q [1]", ("q", "1")),                      # a dimensionless unit, written with a space
+    ("gyro_rad[0]", ("gyro_rad[0]", None)),     # PX4 array columns: the index belongs to the name
+    ("delta_xy[1]", ("delta_xy[1]", None)),
+    ("x(2)", ("x(2)", None)),
+    ("accel[0] [m/s^2]", ("accel[0]", "m/s^2")),
+    ("value[]", ("value", None)),
+])
+def test_array_indexes_are_part_of_the_name(header, expected):
+    assert parse_header_field(header) == expected
