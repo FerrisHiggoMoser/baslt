@@ -1,0 +1,22 @@
+ID,Title,Check,Type,Limit,Unit,When,Applies to,Tolerance,Warn margin,Count,Case,Severity,Status,Notes,Verdict,Result,Margin,Evidence
+,Structural loads,,,,,,,,,,,,,"A heading row: no status, skipped",,,,
+LV-001,Max dynamic pressure,q,upper,70,kPa,ascent,,,2 kPa,,,major,approved,,FAIL,72.66 kPa,'-2.66 kPa (-3.8 %),"worst 72.66 kPa, at T+60.953 s, limit <= 70 kPa, margin -2.66 kPa (-3.8 %), (limit exceeded 1 time for 0.198 s)"
+LV-002,AoA at high q,alpha,range,"[-7, 7]",deg,high_q,,100 ms,,,,major,approved,Short spikes are tolerated and listed,PASS,9.763 deg,'-2.763 deg (-39.5 %),"worst 9.763 deg, at T+86.806 s, limit <= 7 deg, margin -2.763 deg (-39.5 %), (8 short violations within the tolerance)"
+LV-003,Axial load in load relief,load,upper,5,g0,load_relief,,100 ms,,,load relief,critical,approved,Cases: the first matching row applies,PASS,41.33 m/s^2,17.51 m/s^2 (29.8 %),"worst 41.33 m/s^2, at T+98.899 s, limit <= 6 g0, margin 17.51 m/s^2 (29.8 %)"
+LV-003,Axial load,load,upper,6,g0,ascent,,100 ms,,,powered,critical,approved,,PASS,41.33 m/s^2,17.51 m/s^2,
+LV-004,q against the Mach envelope,q,upper,"curve(q_max_vs_mach, mach)",,ascent,,,1 kPa,,,major,approved,A limit that is a curve over another signal,FAIL,72.66 kPa,'-3.146 kPa (-4.5 %),"worst 72.66 kPa, at T+60.953 s, limit <= curve(q_max_vs_mach, mach), margin -3.146 kPa (-4.5 %), (limit exceeded 1 time for 0.2 s)"
+LV-005,Altitude reached,alt,max,>= 40 km,,,,,,,,major,approved,Aggregate: the maximum over the run,PASS,46.03 km,6.032 km (15.1 %),"value 46.03 km, at T+118.911 s, limit >= 40 km, margin 6.032 km (15.1 %)"
+LV-006,MECO time,MECO,event,99 .. 102,s,,,,,1,,critical,approved,"Exactly one MECO, inside the window",PASS,100.1 s,1.12 s (1.1 %),"value 100.1 s, at T+99.031 s, limit [99 s, 102 s], margin 1.12 s (1.1 %)"
+LV-007,Velocity at MECO,"at('MECO', speed)",value,>= 1.8 km/s,,,,,,,,critical,approved,,PASS,1848 m/s,47.74 m/s (2.7 %),"value 1848 m/s, at T+99.031 s, limit >= 1.8 km/s, margin 47.74 m/s (2.7 %)"
+LV-008,Time above 60 kPa,q > 60 kPa,duration,<= 40 s,,ascent,,,,,,minor,approved,,PASS,35.84 s,4.164 s (10.4 %),"value 35.84 s, limit <= 40 s, margin 4.164 s (10.4 %)"
+LV-009,Total AoA exceedance,abs(alpha) > 7 deg,duration,<= 0.5 s,,,,,,,,major,approved,,PASS,0.1331 s,0.3669 s (73.4 %),"value 0.1331 s, limit <= 0.5 s, margin 0.3669 s (73.4 %)"
+,Thermal,,,,,,,,,,,,,,,,,
+LV-010,Skin temperature,skin_temp,upper,420 K,,ascent,,1 s,,,,major,approved,A data gap inside the window gives WARN,WARN,355.9 K,64.11 K (15.3 %),"worst 355.9 K, at T+98.936 s, limit <= 420 K, margin 64.11 K (15.3 %), (data gap of 0.351 s inside the checked window)"
+LV-011,Elevon command range,elevon,range,±20,deg,"after('liftoff', 1 s)",,,,,,minor,approved,,PASS,'-7.413 deg,12.59 deg (62.9 %),"worst -7.413 deg, at T+86.812 s, limit >= -20 deg, margin 12.59 deg (62.9 %)"
+LV-012,Coast mode after MECO,mode == 'COAST',assert,,,after('MECO'),,,,,,major,approved,,PASS,,,the condition held for all 19.88 s checked
+LV-013,Mean thrust in powered flight,mean(thrust),value,>= 2.1 MN,,ascent,,,,,,minor,approved,,PASS,2.153 MN,52.76 kN (2.5 %),"value 2.153 MN, limit >= 2.1 MN, margin 52.76 kN (2.5 %)"
+LV-014,Pitch program start,time('pitch_start'),value,6 ± 1,s,,,,,,,minor,approved,,PASS,6 s,1 s (14.3 %),"value 6 s, limit [5 s, 7 s], margin 1 s (14.3 %)"
+LV-015,Load relief duration,load_relief,duration,>= 15 s,,,,,,,,minor,approved,,PASS,20 s,5 s (33.3 %),"value 20 s, limit >= 15 s, margin 5 s (33.3 %)"
+LV-016,Altitude at end of run,alt,final,>= 40 km,,,,,,,,minor,approved,,PASS,46.03 km,6.032 km (15.1 %),"value 46.03 km, at T+118.911 s, limit >= 40 km, margin 6.032 km (15.1 %)"
+LV-017,Structural modes,,,,,,,,,,,,approved,No check yet: reported as not covered,NOT COVERED,,,no check
+LV-018,Draft limit,q,upper,,kPa,,,,,,,,draft,Draft rows are skipped until approved,,,,

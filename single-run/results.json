@@ -1,0 +1,1111 @@
+{
+  "run": "sim",
+  "source": "sim.h5",
+  "format": "hdf5",
+  "status": "fail",
+  "requirements": "rocket_requirements.csv",
+  "duration": 120.0,
+  "signals": 8,
+  "samples": 960008,
+  "counts": {
+    "pass": 13,
+    "warn": 1,
+    "fail": 2,
+    "not_applicable": 0,
+    "error": 0,
+    "not_covered": 1
+  },
+  "not_covered": [
+    "LV-017"
+  ],
+  "events": {
+    "liftoff": {
+      "count": 1,
+      "times": [
+        1.0885076096471267
+      ],
+      "pending": false
+    },
+    "pitch_start": {
+      "count": 2,
+      "times": [
+        6.0,
+        75.0
+      ],
+      "pending": false
+    },
+    "MECO": {
+      "count": 1,
+      "times": [
+        100.11952928559117
+      ],
+      "pending": false
+    }
+  },
+  "t0": 1.0885076096471267,
+  "t0_event": "liftoff",
+  "params": {},
+  "timing": {
+    "load": 0.0022772439988330007,
+    "evaluate": 0.057481850002659485,
+    "total": 0.09446337298140861
+  },
+  "digest": "sha256-sampled-v1 64c3cafad4bd3779c183ff53e608177df470405e1f7408670a36a1d2cfe9dec3",
+  "error": null,
+  "issues": [],
+  "results": [
+    {
+      "id": "LV-001",
+      "title": "Max dynamic pressure",
+      "kind": "bound",
+      "check": "q",
+      "verdict": "fail",
+      "reason": "limit exceeded 1 time for 0.198 s",
+      "unit": "Pa",
+      "value": 72659.66055077025,
+      "limit": "<= 70 kPa",
+      "limit_value": 70000.0,
+      "margin": -2659.660550770248,
+      "margin_pct": -0.03799515072528926,
+      "at": 62.042,
+      "first_violation": 61.900776595110905,
+      "case": "",
+      "severity": "major",
+      "runs": [
+        {
+          "start": 61.900776595110905,
+          "end": 62.09925835652619,
+          "duration": 0.1984817614152874,
+          "samples": 199,
+          "worst_t": 62.042,
+          "tolerated": false,
+          "case": "",
+          "component": 0,
+          "flags": [],
+          "worst_value": 72659.66055077025,
+          "limit": 70000.0,
+          "excess": 2659.660550770248
+        }
+      ],
+      "totals": {
+        "active_time": 99.03,
+        "gap_time": 0.0,
+        "unknown_time": 0.0,
+        "overlap_time": 0.0,
+        "samples": 99031,
+        "runs": 1,
+        "violating_time": 0.1984817614152874,
+        "tolerated": 0
+      },
+      "context": {
+        "conditions": [
+          "ascent",
+          "load_relief",
+          "high_q"
+        ],
+        "event": "pitch_start",
+        "since": 56.042
+      },
+      "notes": [],
+      "loc": "rocket_requirements.csv:3",
+      "rows": [
+        3
+      ],
+      "passthrough": {
+        "Status": "approved",
+        "Notes": ""
+      },
+      "events": [],
+      "cases": [
+        {
+          "label": "",
+          "verdict": "fail",
+          "reason": null,
+          "value": 72659.66055077025,
+          "limit": 70000.0,
+          "margin": -2659.660550770248,
+          "margin_pct": -0.03799515072528926,
+          "at": 62.042,
+          "runs": 1,
+          "active_time": 99.03,
+          "applies": true,
+          "severity": "major",
+          "row": 3
+        }
+      ],
+      "issues": []
+    },
+    {
+      "id": "LV-002",
+      "title": "AoA at high q",
+      "kind": "bound",
+      "check": "alpha",
+      "verdict": "pass",
+      "reason": null,
+      "unit": "deg",
+      "value": 9.763405147068852,
+      "limit": "<= 7 deg",
+      "limit_value": 7.0,
+      "margin": -2.763405147068852,
+      "margin_pct": -0.39477216386697883,
+      "at": 87.895,
+      "first_violation": null,
+      "case": "",
+      "severity": "major",
+      "runs": [
+        {
+          "start": 58.18445640793649,
+          "end": 58.186194076370434,
+          "duration": 0.0017376684339467374,
+          "samples": 2,
+          "worst_t": 58.185,
+          "tolerated": true,
+          "case": "",
+          "component": 0,
+          "flags": [],
+          "worst_value": -7.5363575317684,
+          "limit": -7.0,
+          "excess": 0.5363575317683997
+        },
+        {
+          "start": 58.187879664803454,
+          "end": 58.18831400355346,
+          "duration": 0.000434338750004315,
+          "samples": 1,
+          "worst_t": 58.188,
+          "tolerated": true,
+          "case": "",
+          "component": 0,
+          "flags": [],
+          "worst_value": -7.072658489416541,
+          "limit": -7.0,
+          "excess": 0.07265848941654074
+        },
+        {
+          "start": 58.189115868227766,
+          "end": 58.203768753406194,
+          "duration": 0.014652885178428221,
+          "samples": 14,
+          "worst_t": 58.196,
+          "tolerated": true,
+          "case": "",
+          "component": 0,
+          "flags": [],
+          "worst_value": -9.020358585555783,
+          "limit": -7.0,
+          "excess": 2.0203585855557833
+        },
+        {
+          "start": 58.20460298353557,
+          "end": 58.21368006611513,
+          "duration": 0.009077082579558748,
+          "samples": 9,
+          "worst_t": 58.21,
+          "tolerated": true,
+          "case": "",
+          "component": 0,
+          "flags": [],
+          "worst_value": -7.865301265459801,
+          "limit": -7.0,
+          "excess": 0.8653012654598013
+        },
+        {
+          "start": 87.8659382184197,
+          "end": 87.86616491803487,
+          "duration": 0.0002266996151689682,
+          "samples": 1,
+          "worst_t": 87.866,
+          "tolerated": true,
+          "case": "",
+          "component": 0,
+          "flags": [],
+          "worst_value": 7.0648697408711385,
+          "limit": 7.0,
+          "excess": 0.0648697408711385
+        },
+        {
+          "start": 87.87288928301695,
+          "end": 87.91895769019149,
+          "duration": 0.046068407174544745,
+          "samples": 46,
+          "worst_t": 87.895,
+          "tolerated": true,
+          "case": "",
+          "component": 0,
+          "flags": [],
+          "worst_value": 9.763405147068852,
+          "limit": 7.0,
+          "excess": 2.763405147068852
+        },
+        {
+          "start": 87.91904558027257,
+          "end": 87.92805580057998,
+          "duration": 0.009010220307416716,
+          "samples": 9,
+          "worst_t": 87.92,
+          "tolerated": true,
+          "case": "",
+          "component": 0,
+          "flags": [],
+          "worst_value": 8.424352332462476,
+          "limit": 7.0,
+          "excess": 1.424352332462476
+        },
+        {
+          "start": 87.93075176482446,
+          "end": 87.93118474855987,
+          "duration": 0.0004329837354077881,
+          "samples": 1,
+          "worst_t": 87.931,
+          "tolerated": true,
+          "case": "",
+          "component": 0,
+          "flags": [],
+          "worst_value": 7.221086171728149,
+          "limit": 7.0,
+          "excess": 0.2210861717281487
+        }
+      ],
+      "totals": {
+        "active_time": 88.739,
+        "gap_time": 0.0,
+        "unknown_time": 0.0,
+        "overlap_time": 0.0,
+        "samples": 88772,
+        "runs": 8,
+        "violating_time": 0.0,
+        "tolerated": 8
+      },
+      "context": {},
+      "notes": [
+        "8 short violations within the tolerance"
+      ],
+      "loc": "rocket_requirements.csv:4",
+      "rows": [
+        4
+      ],
+      "passthrough": {
+        "Status": "approved",
+        "Notes": "Short spikes are tolerated and listed"
+      },
+      "events": [],
+      "cases": [
+        {
+          "label": "",
+          "verdict": "pass",
+          "reason": null,
+          "value": 9.763405147068852,
+          "limit": 7.0,
+          "margin": -2.763405147068852,
+          "margin_pct": -0.39477216386697883,
+          "at": 87.895,
+          "runs": 0,
+          "active_time": 88.739,
+          "applies": true,
+          "severity": "major",
+          "row": 4
+        }
+      ],
+      "issues": []
+    },
+    {
+      "id": "LV-003",
+      "title": "Axial load in load relief",
+      "kind": "bound",
+      "check": "load",
+      "verdict": "pass",
+      "reason": null,
+      "unit": "m/s^2",
+      "value": 41.32748063312349,
+      "limit": "<= 6 g0",
+      "limit_value": 58.8399,
+      "margin": 17.512419366876507,
+      "margin_pct": 0.29762829928121065,
+      "at": 99.988,
+      "first_violation": null,
+      "case": "powered",
+      "severity": "critical",
+      "runs": [],
+      "totals": {
+        "active_time": 99.03,
+        "gap_time": 0.0,
+        "unknown_time": 0.0,
+        "overlap_time": 19.998999999999995,
+        "samples": 99031,
+        "runs": 0,
+        "violating_time": 0.0,
+        "tolerated": 0
+      },
+      "context": {},
+      "notes": [],
+      "loc": "rocket_requirements.csv:5",
+      "rows": [
+        5,
+        6
+      ],
+      "passthrough": {
+        "Status": "approved",
+        "Notes": "Cases: the first matching row applies"
+      },
+      "events": [],
+      "cases": [
+        {
+          "label": "load relief",
+          "verdict": "pass",
+          "reason": null,
+          "value": 31.031656774621293,
+          "limit": 49.033249999999995,
+          "margin": 18.001593225378702,
+          "margin_pct": 0.367130329427046,
+          "at": 74.999,
+          "runs": 0,
+          "active_time": 19.998999999999995,
+          "applies": true,
+          "severity": "critical",
+          "row": 5
+        },
+        {
+          "label": "powered",
+          "verdict": "pass",
+          "reason": null,
+          "value": 41.32748063312349,
+          "limit": 58.8399,
+          "margin": 17.512419366876507,
+          "margin_pct": 0.29762829928121065,
+          "at": 99.988,
+          "runs": 0,
+          "active_time": 79.029,
+          "applies": true,
+          "severity": "critical",
+          "row": 6
+        }
+      ],
+      "issues": []
+    },
+    {
+      "id": "LV-004",
+      "title": "q against the Mach envelope",
+      "kind": "bound",
+      "check": "q",
+      "verdict": "fail",
+      "reason": "limit exceeded 1 time for 0.2 s",
+      "unit": "Pa",
+      "value": 72659.66055077025,
+      "limit": "<= curve(q_max_vs_mach, mach)",
+      "limit_value": 69513.45643115653,
+      "margin": -3146.2041196137143,
+      "margin_pct": -0.04526036081560114,
+      "at": 62.042,
+      "first_violation": 61.899889586443955,
+      "case": "",
+      "severity": "major",
+      "runs": [
+        {
+          "start": 61.899889586443955,
+          "end": 62.10009854065995,
+          "duration": 0.20020895421599505,
+          "samples": 201,
+          "worst_t": 62.042,
+          "tolerated": false,
+          "case": "",
+          "component": 0,
+          "flags": [],
+          "worst_value": 72659.66055077025,
+          "limit": 69513.45643115653,
+          "excess": 3146.2041196137143
+        }
+      ],
+      "totals": {
+        "active_time": 99.03,
+        "gap_time": 0.0,
+        "unknown_time": 0.0,
+        "overlap_time": 0.0,
+        "samples": 99031,
+        "runs": 1,
+        "violating_time": 0.20020895421599505,
+        "tolerated": 0
+      },
+      "context": {
+        "conditions": [
+          "ascent",
+          "load_relief",
+          "high_q"
+        ],
+        "event": "pitch_start",
+        "since": 56.042
+      },
+      "notes": [
+        "curve q_max_vs_mach was used outside its range at 44535 samples"
+      ],
+      "loc": "rocket_requirements.csv:7",
+      "rows": [
+        7
+      ],
+      "passthrough": {
+        "Status": "approved",
+        "Notes": "A limit that is a curve over another signal"
+      },
+      "events": [],
+      "cases": [
+        {
+          "label": "",
+          "verdict": "fail",
+          "reason": null,
+          "value": 72659.66055077025,
+          "limit": 69513.45643115653,
+          "margin": -3146.2041196137143,
+          "margin_pct": -0.04526036081560114,
+          "at": 62.042,
+          "runs": 1,
+          "active_time": 99.03,
+          "applies": true,
+          "severity": "major",
+          "row": 7
+        }
+      ],
+      "issues": []
+    },
+    {
+      "id": "LV-005",
+      "title": "Altitude reached",
+      "kind": "value",
+      "check": "alt",
+      "verdict": "pass",
+      "reason": null,
+      "unit": "m",
+      "value": 46031.92736359399,
+      "limit": ">= 40 km",
+      "limit_value": 40000.0,
+      "margin": 6031.92736359399,
+      "margin_pct": 0.15079818408984974,
+      "at": 120.0,
+      "first_violation": null,
+      "case": null,
+      "severity": "major",
+      "runs": [],
+      "totals": {},
+      "context": {},
+      "notes": [],
+      "loc": "rocket_requirements.csv:8",
+      "rows": [
+        8
+      ],
+      "passthrough": {
+        "Status": "approved",
+        "Notes": "Aggregate: the maximum over the run"
+      },
+      "events": [],
+      "cases": [
+        {
+          "label": "",
+          "verdict": "pass",
+          "reason": null,
+          "value": 46031.92736359399,
+          "limit": 40000.0,
+          "margin": 6031.92736359399,
+          "margin_pct": 0.15079818408984974,
+          "at": 120.0,
+          "runs": 0,
+          "active_time": null,
+          "applies": true,
+          "severity": "major",
+          "row": 8
+        }
+      ],
+      "issues": []
+    },
+    {
+      "id": "LV-006",
+      "title": "MECO time",
+      "kind": "event",
+      "check": "MECO",
+      "verdict": "pass",
+      "reason": null,
+      "unit": "s",
+      "value": 100.11952928559117,
+      "limit": "[99 s, 102 s]",
+      "limit_value": 99.0,
+      "margin": 1.1195292855911703,
+      "margin_pct": 0.011308376622133033,
+      "at": 100.11952928559117,
+      "first_violation": null,
+      "case": null,
+      "severity": "critical",
+      "runs": [],
+      "totals": {
+        "count": 1,
+        "times": [
+          100.11952928559117
+        ],
+        "pending_at_end": false
+      },
+      "context": {},
+      "notes": [],
+      "loc": "rocket_requirements.csv:9",
+      "rows": [
+        9
+      ],
+      "passthrough": {
+        "Status": "approved",
+        "Notes": "Exactly one MECO, inside the window"
+      },
+      "events": [
+        "MECO"
+      ],
+      "cases": [
+        {
+          "label": "",
+          "verdict": "pass",
+          "reason": null,
+          "value": 100.11952928559117,
+          "limit": 99.0,
+          "margin": 1.1195292855911703,
+          "margin_pct": 0.011308376622133033,
+          "at": 100.11952928559117,
+          "runs": 1,
+          "active_time": null,
+          "applies": true,
+          "severity": "critical",
+          "row": 9
+        }
+      ],
+      "issues": []
+    },
+    {
+      "id": "LV-007",
+      "title": "Velocity at MECO",
+      "kind": "value",
+      "check": "at('MECO', speed)",
+      "verdict": "pass",
+      "reason": null,
+      "unit": "m/s",
+      "value": 1847.7377119615458,
+      "limit": ">= 1.8 km/s",
+      "limit_value": 1800.0,
+      "margin": 47.737711961545756,
+      "margin_pct": 0.02652095108974764,
+      "at": 100.11952928559117,
+      "first_violation": null,
+      "case": null,
+      "severity": "critical",
+      "runs": [],
+      "totals": {},
+      "context": {},
+      "notes": [],
+      "loc": "rocket_requirements.csv:10",
+      "rows": [
+        10
+      ],
+      "passthrough": {
+        "Status": "approved",
+        "Notes": ""
+      },
+      "events": [],
+      "cases": [
+        {
+          "label": "",
+          "verdict": "pass",
+          "reason": null,
+          "value": 1847.7377119615458,
+          "limit": 1800.0,
+          "margin": 47.737711961545756,
+          "margin_pct": 0.02652095108974764,
+          "at": 100.11952928559117,
+          "runs": 0,
+          "active_time": null,
+          "applies": true,
+          "severity": "critical",
+          "row": 10
+        }
+      ],
+      "issues": []
+    },
+    {
+      "id": "LV-008",
+      "title": "Time above 60 kPa",
+      "kind": "duration",
+      "check": "q > 60 kPa",
+      "verdict": "pass",
+      "reason": null,
+      "unit": "s",
+      "value": 35.835566437373515,
+      "limit": "<= 40 s",
+      "limit_value": 40.0,
+      "margin": 4.164433562626485,
+      "margin_pct": 0.10411083906566213,
+      "at": null,
+      "first_violation": null,
+      "case": null,
+      "severity": "minor",
+      "runs": [],
+      "totals": {
+        "count": 71,
+        "longest": 35.61380413850823,
+        "total": 35.835566437373515
+      },
+      "context": {},
+      "notes": [],
+      "loc": "rocket_requirements.csv:11",
+      "rows": [
+        11
+      ],
+      "passthrough": {
+        "Status": "approved",
+        "Notes": ""
+      },
+      "events": [],
+      "cases": [
+        {
+          "label": "",
+          "verdict": "pass",
+          "reason": null,
+          "value": 35.835566437373515,
+          "limit": 40.0,
+          "margin": 4.164433562626485,
+          "margin_pct": 0.10411083906566213,
+          "at": null,
+          "runs": 71,
+          "active_time": 99.03,
+          "applies": true,
+          "severity": "minor",
+          "row": 11
+        }
+      ],
+      "issues": []
+    },
+    {
+      "id": "LV-009",
+      "title": "Total AoA exceedance",
+      "kind": "duration",
+      "check": "abs(alpha) > 7 deg",
+      "verdict": "pass",
+      "reason": null,
+      "unit": "s",
+      "value": 0.13305721030033268,
+      "limit": "<= 0.5 s",
+      "limit_value": 0.5,
+      "margin": 0.3669427896996673,
+      "margin_pct": 0.7338855793993346,
+      "at": null,
+      "first_violation": null,
+      "case": null,
+      "severity": "major",
+      "runs": [],
+      "totals": {
+        "count": 10,
+        "longest": 0.049758816226272984,
+        "total": 0.13305721030033268
+      },
+      "context": {},
+      "notes": [],
+      "loc": "rocket_requirements.csv:12",
+      "rows": [
+        12
+      ],
+      "passthrough": {
+        "Status": "approved",
+        "Notes": ""
+      },
+      "events": [],
+      "cases": [
+        {
+          "label": "",
+          "verdict": "pass",
+          "reason": null,
+          "value": 0.13305721030033268,
+          "limit": 0.5,
+          "margin": 0.3669427896996673,
+          "margin_pct": 0.7338855793993346,
+          "at": null,
+          "runs": 10,
+          "active_time": null,
+          "applies": true,
+          "severity": "major",
+          "row": 12
+        }
+      ],
+      "issues": []
+    },
+    {
+      "id": "LV-010",
+      "title": "Skin temperature",
+      "kind": "bound",
+      "check": "skin_temp",
+      "verdict": "warn",
+      "reason": "data gap of 0.351 s inside the checked window",
+      "unit": "K",
+      "value": 355.8855264563204,
+      "limit": "<= 420 K",
+      "limit_value": 420.0,
+      "margin": 64.1144735436796,
+      "margin_pct": 0.15265350843733236,
+      "at": 100.025,
+      "first_violation": null,
+      "case": "",
+      "severity": "major",
+      "runs": [],
+      "totals": {
+        "active_time": 99.03,
+        "gap_time": 0.3509999999999991,
+        "unknown_time": 0.0,
+        "overlap_time": 0.0,
+        "samples": 98681,
+        "runs": 0,
+        "violating_time": 0.0,
+        "tolerated": 0
+      },
+      "context": {
+        "conditions": [
+          "ascent",
+          "high_q"
+        ],
+        "event": "pitch_start",
+        "since": 25.025000000000006
+      },
+      "notes": [],
+      "loc": "rocket_requirements.csv:14",
+      "rows": [
+        14
+      ],
+      "passthrough": {
+        "Status": "approved",
+        "Notes": "A data gap inside the window gives WARN"
+      },
+      "events": [],
+      "cases": [
+        {
+          "label": "",
+          "verdict": "pass",
+          "reason": null,
+          "value": 355.8855264563204,
+          "limit": 420.0,
+          "margin": 64.1144735436796,
+          "margin_pct": 0.15265350843733236,
+          "at": 100.025,
+          "runs": 0,
+          "active_time": 99.03,
+          "applies": true,
+          "severity": "major",
+          "row": 14
+        }
+      ],
+      "issues": []
+    },
+    {
+      "id": "LV-011",
+      "title": "Elevon command range",
+      "kind": "bound",
+      "check": "elevon",
+      "verdict": "pass",
+      "reason": null,
+      "unit": "deg",
+      "value": -7.412539562164296,
+      "limit": ">= -20 deg",
+      "limit_value": -20.0,
+      "margin": 12.587460437835704,
+      "margin_pct": 0.6293730218917852,
+      "at": 87.901,
+      "first_violation": null,
+      "case": "",
+      "severity": "minor",
+      "runs": [],
+      "totals": {
+        "active_time": 117.911,
+        "gap_time": 0.0,
+        "unknown_time": 0.0,
+        "overlap_time": 0.0,
+        "samples": 117912,
+        "runs": 0,
+        "violating_time": 0.0,
+        "tolerated": 0
+      },
+      "context": {},
+      "notes": [],
+      "loc": "rocket_requirements.csv:15",
+      "rows": [
+        15
+      ],
+      "passthrough": {
+        "Status": "approved",
+        "Notes": ""
+      },
+      "events": [],
+      "cases": [
+        {
+          "label": "",
+          "verdict": "pass",
+          "reason": null,
+          "value": -7.412539562164296,
+          "limit": -20.0,
+          "margin": 12.587460437835704,
+          "margin_pct": 0.6293730218917852,
+          "at": 87.901,
+          "runs": 0,
+          "active_time": 117.911,
+          "applies": true,
+          "severity": "minor",
+          "row": 15
+        }
+      ],
+      "issues": []
+    },
+    {
+      "id": "LV-012",
+      "title": "Coast mode after MECO",
+      "kind": "assert",
+      "check": "mode == 'COAST'",
+      "verdict": "pass",
+      "reason": null,
+      "unit": null,
+      "value": null,
+      "limit": null,
+      "limit_value": null,
+      "margin": null,
+      "margin_pct": null,
+      "at": null,
+      "first_violation": null,
+      "case": "",
+      "severity": "major",
+      "runs": [],
+      "totals": {
+        "active_time": 19.879999999999995,
+        "gap_time": 0.0,
+        "unknown_time": 0.0,
+        "overlap_time": 0.0,
+        "samples": 19881,
+        "runs": 0,
+        "violating_time": 0.0,
+        "tolerated": 0
+      },
+      "context": {},
+      "notes": [],
+      "loc": "rocket_requirements.csv:16",
+      "rows": [
+        16
+      ],
+      "passthrough": {
+        "Status": "approved",
+        "Notes": ""
+      },
+      "events": [],
+      "cases": [
+        {
+          "label": "",
+          "verdict": "pass",
+          "reason": null,
+          "value": null,
+          "limit": null,
+          "margin": null,
+          "margin_pct": null,
+          "at": null,
+          "runs": 0,
+          "active_time": 19.879999999999995,
+          "applies": true,
+          "severity": "major",
+          "row": 16
+        }
+      ],
+      "issues": []
+    },
+    {
+      "id": "LV-013",
+      "title": "Mean thrust in powered flight",
+      "kind": "value",
+      "check": "mean(thrust)",
+      "verdict": "pass",
+      "reason": null,
+      "unit": "N",
+      "value": 2152756.158533556,
+      "limit": ">= 2.1 MN",
+      "limit_value": 2100000.0,
+      "margin": 52756.15853355592,
+      "margin_pct": 0.02512198025407425,
+      "at": null,
+      "first_violation": null,
+      "case": null,
+      "severity": "minor",
+      "runs": [],
+      "totals": {},
+      "context": {},
+      "notes": [],
+      "loc": "rocket_requirements.csv:17",
+      "rows": [
+        17
+      ],
+      "passthrough": {
+        "Status": "approved",
+        "Notes": ""
+      },
+      "events": [],
+      "cases": [
+        {
+          "label": "",
+          "verdict": "pass",
+          "reason": null,
+          "value": 2152756.158533556,
+          "limit": 2100000.0,
+          "margin": 52756.15853355592,
+          "margin_pct": 0.02512198025407425,
+          "at": null,
+          "runs": 0,
+          "active_time": 99.03,
+          "applies": true,
+          "severity": "minor",
+          "row": 17
+        }
+      ],
+      "issues": []
+    },
+    {
+      "id": "LV-014",
+      "title": "Pitch program start",
+      "kind": "value",
+      "check": "time('pitch_start')",
+      "verdict": "pass",
+      "reason": null,
+      "unit": "s",
+      "value": 6.0,
+      "limit": "[5 s, 7 s]",
+      "limit_value": 7.0,
+      "margin": 1.0,
+      "margin_pct": 0.14285714285714285,
+      "at": null,
+      "first_violation": null,
+      "case": null,
+      "severity": "minor",
+      "runs": [],
+      "totals": {},
+      "context": {},
+      "notes": [],
+      "loc": "rocket_requirements.csv:18",
+      "rows": [
+        18
+      ],
+      "passthrough": {
+        "Status": "approved",
+        "Notes": ""
+      },
+      "events": [],
+      "cases": [
+        {
+          "label": "",
+          "verdict": "pass",
+          "reason": null,
+          "value": 6.0,
+          "limit": 7.0,
+          "margin": 1.0,
+          "margin_pct": 0.14285714285714285,
+          "at": null,
+          "runs": 0,
+          "active_time": null,
+          "applies": true,
+          "severity": "minor",
+          "row": 18
+        }
+      ],
+      "issues": []
+    },
+    {
+      "id": "LV-015",
+      "title": "Load relief duration",
+      "kind": "duration",
+      "check": "load_relief",
+      "verdict": "pass",
+      "reason": null,
+      "unit": "s",
+      "value": 20.0,
+      "limit": ">= 15 s",
+      "limit_value": 15.0,
+      "margin": 5.0,
+      "margin_pct": 0.3333333333333333,
+      "at": null,
+      "first_violation": null,
+      "case": null,
+      "severity": "minor",
+      "runs": [],
+      "totals": {
+        "count": 1,
+        "longest": 20.0,
+        "total": 20.0
+      },
+      "context": {},
+      "notes": [],
+      "loc": "rocket_requirements.csv:19",
+      "rows": [
+        19
+      ],
+      "passthrough": {
+        "Status": "approved",
+        "Notes": ""
+      },
+      "events": [],
+      "cases": [
+        {
+          "label": "",
+          "verdict": "pass",
+          "reason": null,
+          "value": 20.0,
+          "limit": 15.0,
+          "margin": 5.0,
+          "margin_pct": 0.3333333333333333,
+          "at": null,
+          "runs": 1,
+          "active_time": null,
+          "applies": true,
+          "severity": "minor",
+          "row": 19
+        }
+      ],
+      "issues": []
+    },
+    {
+      "id": "LV-016",
+      "title": "Altitude at end of run",
+      "kind": "value",
+      "check": "alt",
+      "verdict": "pass",
+      "reason": null,
+      "unit": "m",
+      "value": 46031.92736359399,
+      "limit": ">= 40 km",
+      "limit_value": 40000.0,
+      "margin": 6031.92736359399,
+      "margin_pct": 0.15079818408984974,
+      "at": 120.0,
+      "first_violation": null,
+      "case": null,
+      "severity": "minor",
+      "runs": [],
+      "totals": {},
+      "context": {},
+      "notes": [],
+      "loc": "rocket_requirements.csv:20",
+      "rows": [
+        20
+      ],
+      "passthrough": {
+        "Status": "approved",
+        "Notes": ""
+      },
+      "events": [],
+      "cases": [
+        {
+          "label": "",
+          "verdict": "pass",
+          "reason": null,
+          "value": 46031.92736359399,
+          "limit": 40000.0,
+          "margin": 6031.92736359399,
+          "margin_pct": 0.15079818408984974,
+          "at": 120.0,
+          "runs": 0,
+          "active_time": null,
+          "applies": true,
+          "severity": "minor",
+          "row": 20
+        }
+      ],
+      "issues": []
+    }
+  ]
+}

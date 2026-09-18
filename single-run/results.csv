@@ -1,0 +1,17 @@
+id,title,verdict,reason,kind,check,value,unit,limit,margin,margin_pct,at,at_t0,first_violation,case,severity,runs,violating_time,location,Status,Notes
+LV-001,Max dynamic pressure,FAIL,limit exceeded 1 time for 0.198 s,bound,q,72659.66055077025,Pa,<= 70 kPa,-2659.660550770248,-0.03799515072528926,62.042,60.95349239035288,61.900776595110905,,major,1,0.1984817614152874,rocket_requirements.csv:3,approved,
+LV-002,AoA at high q,PASS,,bound,alpha,9.763405147068852,deg,<= 7 deg,-2.763405147068852,-0.39477216386697883,87.895,86.80649239035287,,,major,8,0.0,rocket_requirements.csv:4,approved,Short spikes are tolerated and listed
+LV-003,Axial load in load relief,PASS,,bound,load,41.32748063312349,m/s^2,<= 6 g0,17.512419366876507,0.29762829928121065,99.988,98.89949239035288,,powered,critical,0,0.0,rocket_requirements.csv:5,approved,Cases: the first matching row applies
+LV-004,q against the Mach envelope,FAIL,limit exceeded 1 time for 0.2 s,bound,q,72659.66055077025,Pa,"<= curve(q_max_vs_mach, mach)",-3146.2041196137143,-0.04526036081560114,62.042,60.95349239035288,61.899889586443955,,major,1,0.20020895421599505,rocket_requirements.csv:7,approved,A limit that is a curve over another signal
+LV-005,Altitude reached,PASS,,value,alt,46031.92736359399,m,>= 40 km,6031.92736359399,0.15079818408984974,120.0,118.91149239035288,,,major,,,rocket_requirements.csv:8,approved,Aggregate: the maximum over the run
+LV-006,MECO time,PASS,,event,MECO,100.11952928559117,s,"[99 s, 102 s]",1.1195292855911703,0.011308376622133033,100.11952928559117,99.03102167594405,,,critical,1,,rocket_requirements.csv:9,approved,"Exactly one MECO, inside the window"
+LV-007,Velocity at MECO,PASS,,value,"at('MECO', speed)",1847.7377119615458,m/s,>= 1.8 km/s,47.737711961545756,0.02652095108974764,100.11952928559117,99.03102167594405,,,critical,,,rocket_requirements.csv:10,approved,
+LV-008,Time above 60 kPa,PASS,,duration,q > 60 kPa,35.835566437373515,s,<= 40 s,4.164433562626485,0.10411083906566213,,,,,minor,71,,rocket_requirements.csv:11,approved,
+LV-009,Total AoA exceedance,PASS,,duration,abs(alpha) > 7 deg,0.13305721030033268,s,<= 0.5 s,0.3669427896996673,0.7338855793993346,,,,,major,10,,rocket_requirements.csv:12,approved,
+LV-010,Skin temperature,WARN,data gap of 0.351 s inside the checked window,bound,skin_temp,355.8855264563204,K,<= 420 K,64.1144735436796,0.15265350843733236,100.025,98.93649239035288,,,major,0,0.0,rocket_requirements.csv:14,approved,A data gap inside the window gives WARN
+LV-011,Elevon command range,PASS,,bound,elevon,-7.412539562164296,deg,>= -20 deg,12.587460437835704,0.6293730218917852,87.901,86.81249239035287,,,minor,0,0.0,rocket_requirements.csv:15,approved,
+LV-012,Coast mode after MECO,PASS,,assert,mode == 'COAST',,,,,,,,,,major,0,0.0,rocket_requirements.csv:16,approved,
+LV-013,Mean thrust in powered flight,PASS,,value,mean(thrust),2152756.158533556,N,>= 2.1 MN,52756.15853355592,0.02512198025407425,,,,,minor,,,rocket_requirements.csv:17,approved,
+LV-014,Pitch program start,PASS,,value,time('pitch_start'),6.0,s,"[5 s, 7 s]",1.0,0.14285714285714285,,,,,minor,,,rocket_requirements.csv:18,approved,
+LV-015,Load relief duration,PASS,,duration,load_relief,20.0,s,>= 15 s,5.0,0.3333333333333333,,,,,minor,1,,rocket_requirements.csv:19,approved,
+LV-016,Altitude at end of run,PASS,,value,alt,46031.92736359399,m,>= 40 km,6031.92736359399,0.15079818408984974,120.0,118.91149239035288,,,minor,,,rocket_requirements.csv:20,approved,

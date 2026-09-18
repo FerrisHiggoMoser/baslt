@@ -1,0 +1,22 @@
+ID,Title,Check,Type,Limit,Unit,When,Applies to,Tolerance,Warn margin,Count,Case,Severity,Status,Notes,Verdict,Result,Margin,Evidence
+,Structural loads,,,,,,,,,,,,,"A heading row: no status, skipped",,,,
+LV-001,Max dynamic pressure,q,upper,70,kPa,ascent,,,2 kPa,,,major,approved,,FAIL,72.47 kPa,'-2.468 kPa (-3.5 %),"FAIL in 3/40 runs, worst -2.468 kPa (run_0039)"
+LV-002,AoA at high q,alpha,range,"[-7, 7]",deg,high_q,,100 ms,,,,major,approved,Short spikes are tolerated and listed,PASS,10.5 deg,'-3.497 deg (-50.0 %),"PASS in all 40 runs, least margin -3.497 deg (run_0017)"
+LV-003,Axial load in load relief,load,upper,5,g0,load_relief,,100 ms,,,load relief,critical,approved,Cases: the first matching row applies,PASS,42.79 m/s^2,16.05 m/s^2 (27.3 %),"PASS in all 40 runs, least margin 16.05 m/s^2 (run_0023)"
+LV-003,Axial load,load,upper,6,g0,ascent,,100 ms,,,powered,critical,approved,,,,,
+LV-004,q against the Mach envelope,q,upper,"curve(q_max_vs_mach, mach)",,ascent,,,1 kPa,,,major,approved,A limit that is a curve over another signal,FAIL,72.47 kPa,'-2.989 kPa (-4.3 %),"FAIL in 3/40 runs, worst -2.989 kPa (run_0039)"
+LV-005,Altitude reached,alt,max,>= 40 km,,,,,,,,major,approved,Aggregate: the maximum over the run,PASS,44.36 km,4.358 km (10.9 %),"PASS in all 40 runs, least margin 4.358 km (run_0028)"
+LV-006,MECO time,MECO,event,99 .. 102,s,,,,,1,,critical,approved,"Exactly one MECO, inside the window",PASS,100.1 s,1.118 s (1.1 %),"PASS in all 40 runs, least margin 1.118 s (run_0001)"
+LV-007,Velocity at MECO,"at('MECO', speed)",value,>= 1.8 km/s,,,,,,,,critical,approved,,FAIL,1785 m/s,'-15.47 m/s (-0.9 %),"FAIL in 3/40 runs, worst -15.47 m/s (run_0028)"
+LV-008,Time above 60 kPa,q > 60 kPa,duration,<= 40 s,,ascent,,,,,,minor,approved,,FAIL,40.42 s,'-0.4222 s (-1.1 %),"FAIL in 1/40 runs, worst -0.4222 s (run_0028)"
+LV-009,Total AoA exceedance,abs(alpha) > 7 deg,duration,<= 0.5 s,,,,,,,,major,approved,,FAIL,0.8902 s,'-0.3902 s (-78.0 %),"FAIL in 2/40 runs, worst -0.3902 s (run_0034)"
+,Thermal,,,,,,,,,,,,,,,,,
+LV-010,Skin temperature,skin_temp,upper,420 K,,ascent,,1 s,,,,major,approved,A data gap inside the window gives WARN,WARN,356.3 K,63.75 K (15.2 %),"WARN in 40/40 runs, least margin 63.75 K (run_0017)"
+LV-011,Elevon command range,elevon,range,±20,deg,"after('liftoff', 1 s)",,,,,,minor,approved,,PASS,'-7.705 deg,12.29 deg (61.5 %),"PASS in all 40 runs, least margin 12.29 deg (run_0005)"
+LV-012,Coast mode after MECO,mode == 'COAST',assert,,,after('MECO'),,,,,,major,approved,,PASS,,,PASS in all 40 runs
+LV-013,Mean thrust in powered flight,mean(thrust),value,>= 2.1 MN,,ascent,,,,,,minor,approved,,PASS,2.136 MN,35.69 kN (1.7 %),"PASS in all 40 runs, least margin 35.69 kN (run_0001)"
+LV-014,Pitch program start,time('pitch_start'),value,6 ± 1,s,,,,,,,minor,approved,,PASS,6 s,1 s (14.3 %),"PASS in all 40 runs, least margin 1 s (run_0000)"
+LV-015,Load relief duration,load_relief,duration,>= 15 s,,,,,,,,minor,approved,,PASS,20 s,5 s (33.3 %),"PASS in all 40 runs, least margin 5 s (run_0000)"
+LV-016,Altitude at end of run,alt,final,>= 40 km,,,,,,,,minor,approved,,PASS,44.36 km,4.358 km (10.9 %),"PASS in all 40 runs, least margin 4.358 km (run_0028)"
+LV-017,Structural modes,,,,,,,,,,,,approved,No check yet: reported as not covered,NOT COVERED,,,no check
+LV-018,Draft limit,q,upper,,kPa,,,,,,,,draft,Draft rows are skipped until approved,,,,
