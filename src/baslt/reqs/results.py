@@ -411,6 +411,18 @@ def write_back_values(reqset: RequirementSet, results: Mapping[str, RequirementR
     return rows
 
 
+def _last_used_column(table) -> int:
+    """The rightmost column that holds anything, which can be further right than the header row reaches."""
+    last = 0
+    for row in table.rows:
+        for col in range(len(row), last, -1):
+            cell = row[col - 1]
+            if cell is not None and not cell.is_empty:
+                last = max(last, col)
+                break
+    return last
+
+
 def annotated_name(table) -> str:
     """The file name of the checked copy: same name and kind, except ReqIF, whose copy is a CSV table."""
     suffix = ".csv" if table.format == "reqif" else table.path.suffix
@@ -427,7 +439,7 @@ def annotate(reqset: RequirementSet, results: Mapping[str, RequirementResult], d
     write_back = reqset.config.requirements.write_back or DEFAULT_WRITE_BACK
     header = [normalize_header(text) for text in table.row_texts(reqset.header_row)]
     columns: dict[str, int] = {}
-    next_col = max(len(header), 1) + 1
+    next_col = max(len(header), _last_used_column(table), 1) + 1  # never write over a column the table uses
     edits: list = []
     for field_name, name in write_back.items():
         wanted = normalize_header(name)

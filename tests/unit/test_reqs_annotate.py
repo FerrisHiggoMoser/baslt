@@ -110,3 +110,17 @@ def test_xlsx_copies_change_only_the_requirements_sheet(tmp_path):
     assert book["Requirements"].cell(3, 11).data_type == "s"
     assert rows[5][7] == "NOT COVERED"
     assert list(book["Other"].iter_rows(values_only=True)) == [("keep", 1.5)]
+
+
+def test_results_go_after_the_widest_used_column(tmp_path):
+    """A sheet's data rows can reach further right than its header row."""
+    source = tmp_path / "wide.csv"
+    with open(source, "w", newline="", encoding="utf-8") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(["ID", "Check", "Limit", "Unit"])
+        writer.writerow(["R-1", "x", "<= 3", "m", "", "a note far to the right"])
+    reqset, results, _ = checked(source)
+    dst, _ = annotate(reqset, results, tmp_path / "wide.checked.csv")
+    rows = list(csv.reader(dst.open(newline="", encoding="utf-8")))
+    assert rows[0] == ["ID", "Check", "Limit", "Unit", "", "", "Verdict", "Result", "Margin", "Evidence"]
+    assert rows[1][5] == "a note far to the right" and rows[1][6] == "FAIL"
