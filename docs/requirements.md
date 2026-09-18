@@ -213,6 +213,17 @@ group or per topic, and timestamps in other units (`time.unit: us`). A column of
 signal (held between samples, compared by label); give it `kind: continuous` in `signals:` when it is really a
 measurement. `baslt inspect RUN` shows what a reader made of a file, and says what it had to skip.
 
+Nothing has to be guessed. `source:` settles how the run files are read, and what it says wins:
+
+```yaml
+source:
+  format: csv            # read the files as this format whatever they are called
+  delimiter: ";"         # CSV: one character, or "whitespace"
+  encoding: cp1252       # CSV
+  units_row: true        # true, false, or auto (the default: a row of units is recognized)
+  decimal_comma: true    # true, false, or auto (the default: 0,5 is a number where the comma does not split)
+```
+
 ## Where and when
 
 A requirement is evaluated on the clock of the first signal its check reads, then its condition's and cases'.
@@ -296,6 +307,9 @@ checks:                          # an engineer-owned sheet of checks, joined by 
   file: checks.xlsx
   sheet: Checks
   key: ID
+
+source:                          # how to read the run files (below); everything here is optional
+  delimiter: ";"
 
 time:
   signal: t                      # the run's clock when signals do not name their own

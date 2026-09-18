@@ -342,3 +342,28 @@ def test_numbers_written_with_a_decimal_comma(tmp_path):
     thousands = tmp_path / "thousands.csv"
     thousands.write_text("Time;Count\n0;1,234,567\n1;2,345,678\n", encoding="utf-8")
     assert open_source(thousands).load().signals["Count"].labels == ["1,234,567", "2,345,678"]  # not numbers
+
+
+def test_reading_settings_can_be_given_instead_of_guessed(tmp_path):
+    """Nothing about a file has to be guessed: the mapping's `source:` settings win."""
+    from baslt.reqs.api import load
+    from baslt.reqs.bind import open_run_source
+
+    path = tmp_path / "bench.csv"
+    path.write_text("Time;Speed\ns;m/s\n0,0;1,5\n0,1;2,5\n", encoding="utf-8")
+    table = tmp_path / "reqs.csv"
+    table.write_text("ID,Check,Type,Limit\nS-1,Speed,upper,<= 5\n", encoding="utf-8")
+
+    forced = load(table, mapping={"source": {"delimiter": ";", "units_row": True, "decimal_comma": True}})
+    adapter, _ = open_run_source(path, forced.config)
+    run = adapter.load()
+    assert run.signals["Speed"].v.tolist() == [1.5, 2.5] and run.signals["Speed"].unit == "m/s"
+
+    plain = load(table, mapping={"source": {"units_row": False, "decimal_comma": False}})
+    adapter, _ = open_run_source(path, plain.config)
+    with pytest.raises(SourceError, match="time must be numeric"):
+        adapter.load()  # read exactly as asked: the units row is data and the commas are text
+
+    auto = load(table, mapping={"source": {"units_row": "auto", "decimal_comma": "auto"}})
+    adapter, _ = open_run_source(path, auto.config)
+    assert adapter.load().signals["Speed"].v.tolist() == [1.5, 2.5]

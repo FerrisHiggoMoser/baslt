@@ -75,10 +75,14 @@ class CsvSource:
         *,
         delimiter: str | None = None,
         encoding: str = "utf-8-sig",
+        units_row: bool | None = None,
+        decimal_comma: bool | None = None,
         time_hints: Mapping[str, str] | None = None,
         global_time: str | None = None,
     ) -> None:
         self.path = Path(path)
+        self._units_row = units_row  # None: decide from the file
+        self._decimal_comma = decimal_comma
         if delimiter is not None and delimiter in (" ", WHITESPACE):
             delimiter = WHITESPACE
         elif delimiter is not None and len(delimiter) != 1:
@@ -147,7 +151,10 @@ class CsvSource:
         issues: list[str] = []
         column_issues: dict[str, list[str]] = {}
         later = [_split_fields(line, delimiter) for line in sample[1:4]]
-        if has_header and first_tokens is not None and _is_units_row(first_tokens, later):
+        units_row = self._units_row
+        if units_row is None:
+            units_row = has_header and first_tokens is not None and _is_units_row(first_tokens, later)
+        if units_row and has_header and first_tokens is not None:
             for i, token in enumerate(first_tokens[:len(units)]):
                 text = token.strip().strip('"')
                 if text and not units[i]:
@@ -158,7 +165,7 @@ class CsvSource:
         if first_tokens is None:
             columns = {name: np.empty(0, dtype=np.float64) for name in names}
         else:
-            columns = self._load_columns(delimiter, skip, names, column_issues)
+            columns = self._load_columns(delimiter, skip, names, column_issues, self._decimal_comma)
             for name, token in zip(names, first_tokens):
                 columns[name] = _maybe_integer(columns[name], token)
         return _Table(names=names, units=units, columns=columns, issues=issues, column_issues=column_issues)
@@ -183,18 +190,19 @@ class CsvSource:
                         break
         return header, skip, (sample[0] if sample else None), sample
 
-    def _load_columns(self, delimiter: str, skip: int, names: list[str],
-                      column_issues: dict[str, list[str]]) -> dict[str, np.ndarray]:
+    def _load_columns(self, delimiter: str, skip: int, names: list[str], column_issues: dict[str, list[str]],
+                      decimal_comma: bool | None = None) -> dict[str, np.ndarray]:
         """Read every column with the fastest parser the file allows."""
-        matrix = self._load_fast(delimiter, skip, len(names))
-        if matrix is not None:
-            by_column = np.ascontiguousarray(matrix.T)  # one contiguous row per column
-            del matrix
-            return {name: by_column[i] for i, name in enumerate(names)}
-        mixed = self._load_mixed(delimiter, skip, names, column_issues)
-        if mixed is not None:
-            return mixed
-        return self._load_fallback(delimiter, skip, names, column_issues)
+        if decimal_comma is not True:
+            matrix = self._load_fast(delimiter, skip, len(names))
+            if matrix is not None:
+                by_column = np.ascontiguousarray(matrix.T)  # one contiguous row per column
+                del matrix
+                return {name: by_column[i] for i, name in enumerate(names)}
+            mixed = self._load_mixed(delimiter, skip, names, column_issues, decimal_comma)
+            if mixed is not None:
+                return mixed
+        return self._load_fallback(delimiter, skip, names, column_issues, decimal_comma)
 
     def _loadtxt(self, delimiter: str, skip: int, dtype: np.dtype | type,
                  usecols: Sequence[int] | None) -> np.ndarray:
@@ -213,8 +221,8 @@ class CsvSource:
             return None
         return matrix
 
-    def _load_mixed(self, delimiter: str, skip: int, names: list[str],
-                    column_issues: dict[str, list[str]]) -> dict[str, np.ndarray] | None:
+    def _load_mixed(self, delimiter: str, skip: int, names: list[str], column_issues: dict[str, list[str]],
+                    decimal_comma: bool | None = None) -> dict[str, np.ndarray] | None:
         """Numeric columns as float64 and the remaining ones as text, or None when numpy cannot tokenize the file.
 
         numpy names the column it could not convert, so the columns that need reading as text are found by
@@ -257,7 +265,7 @@ class CsvSource:
         found: dict[str, list[str]] = {}
         for position, index in enumerate(text):
             name = names[index]
-            columns[name] = _column_from_text(name, raw[:, position], found)
+            columns[name] = _column_from_text(name, raw[:, position], found, decimal_comma)
         if set(columns) != set(names):
             return None
         column_issues.update(found)
@@ -278,8 +286,8 @@ class CsvSource:
             return False
         return True
 
-    def _load_fallback(self, delimiter: str, skip: int, names: list[str],
-                       column_issues: dict[str, list[str]]) -> dict[str, np.ndarray]:
+    def _load_fallback(self, delimiter: str, skip: int, names: list[str], column_issues: dict[str, list[str]],
+                       decimal_comma: bool | None = None) -> dict[str, np.ndarray]:
         with open(self.path, encoding=self._encoding, newline="") as fh:
             for _ in range(skip):
                 next(fh, None)
@@ -298,7 +306,7 @@ class CsvSource:
         cells = list(zip(*rows)) if rows else [() for _ in names]
         for name, col in zip(names, cells):
             text = np.array(col, dtype=str) if col else np.empty(0, dtype="<U1")
-            columns[name] = _column_from_text(name, text, column_issues)
+            columns[name] = _column_from_text(name, text, column_issues, decimal_comma)
         return columns
 
     # ----------------------------------------------------------------------------------------------------------
@@ -413,9 +421,14 @@ def _is_units_row(tokens: Sequence[str], later: Sequence[Sequence[str]]) -> bool
     """Whether the row under the header holds units (`s`, `m/s`) rather than data: no cell is a number here,
     some cell is a number further down, and the row is not simply blank."""
     filled = [token for token in tokens if token.strip()]
-    if not filled or any(_is_number(token) for token in filled):
+    if not filled or any(_is_number_like(token) for token in filled):
         return False
-    return any(_is_number(token) for row in later for token in row if token.strip())
+    return any(_is_number_like(token) for row in later for token in row if token.strip())
+
+
+def _is_number_like(text: str) -> bool:
+    """A number as anyone writes it, with a decimal point or a decimal comma."""
+    return _is_number(text) or bool(_DECIMAL_COMMA_RE.match(text.strip().strip('"')))
 
 
 def _failed_column(exc: ValueError) -> int | None:
@@ -424,13 +437,18 @@ def _failed_column(exc: ValueError) -> int | None:
     return int(match.group(1)) - 1 if match is not None else None
 
 
-def _column_from_text(name: str, text: np.ndarray, column_issues: dict[str, list[str]]) -> np.ndarray:
+def _column_from_text(name: str, text: np.ndarray, column_issues: dict[str, list[str]],
+                      decimal_comma: bool | None = None) -> np.ndarray:
     """One column of cells as float64 with empty cells as NaN, or as stripped text when it is not numeric."""
     values = np.char.strip(text) if text.size else np.empty(0, dtype="<U1")
     empty = values == ""
     try:
+        if decimal_comma is True:
+            raise ValueError("commas are decimal points in this file")
         numbers = np.where(empty, "nan", values).astype(np.float64)
     except ValueError:
+        if decimal_comma is False:
+            return values
         decimal_comma = _as_decimal_comma(values, empty)
         if decimal_comma is None:
             return values

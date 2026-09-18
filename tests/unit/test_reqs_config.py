@@ -217,3 +217,16 @@ def test_deep_merge_does_not_touch_its_inputs():
     assert merged == {"a": {"b": [1], "d": 2}, "c": 1} and base == {"a": {"b": [1]}, "c": 1}
     merged["a"]["b"].append(2)
     assert base["a"]["b"] == [1]
+
+
+def test_source_settings(tmp_path):
+    config = load_config({"source": {"format": "csv", "delimiter": ";", "encoding": "cp1252",
+                                     "units_row": "yes", "decimal_comma": "no"}})
+    assert config.source.options() == {"format": "csv", "delimiter": ";", "encoding": "cp1252",
+                                       "units_row": True, "decimal_comma": False}
+    assert load_config({}).source.options() == {}
+    assert load_config({"source": {"units_row": "auto"}}).source.options() == {}
+    with pytest.raises(RequirementsError, match="source.units_row: expected true or false"):
+        load_config({"source": {"units_row": "sometimes"}})
+    with pytest.raises(RequirementsError, match="unknown key 'delimeter'"):
+        load_config({"source": {"delimeter": ";"}})

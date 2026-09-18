@@ -426,7 +426,8 @@ def open_run_source(source, config: Config):
     for alias in config.signals.values():
         if alias.path is not None and alias.time is not None:
             hints[alias.path.lstrip("/")] = alias.time
-    adapter = open_source(source, time_hints=hints or None, global_time=config.time.signal)
+    settings = config.source.options() if isinstance(source, (str, Path)) else {}
+    adapter = open_source(source, time_hints=hints or None, global_time=config.time.signal, **settings)
     scale = 1.0
     if config.time.unit:
         scale = config.units.factor(config.time.unit, "s")

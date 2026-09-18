@@ -46,8 +46,9 @@ FIELDS: tuple[str, ...] = (
 )
 RESULT_FIELDS: tuple[str, ...] = ("verdict", "value", "limit", "margin", "margin_pct", "at", "evidence", "runs")
 CONFIG_SHEETS: tuple[str, ...] = ("Signals", "Events", "Conditions", "Curves", "Units", "Settings")
-TOP_KEYS = ("version", "name", "requirements", "checks", "time", "signals", "units", "events", "conditions",
-            "curves", "params", "defaults", "report", "archive")
+TOP_KEYS = ("version", "name", "requirements", "checks", "time", "source", "signals", "units", "events",
+            "conditions", "curves", "params", "defaults", "report", "archive")
+SOURCE_KEYS = ("format", "delimiter", "encoding", "units_row", "decimal_comma")
 KINDS = ("continuous", "discrete", "vector")
 EVENT_CONDITIONS = ("falls_below", "rises_above", "equals")
 OCCURRENCE_RE = re.compile(r"^(first|last|all|\d+)$")
@@ -103,6 +104,21 @@ class ChecksJoin:
     sheet: str | int | None = None
     key: str | None = None
     header_row: int | None = None
+
+
+@dataclass(slots=True)
+class SourceSpec:
+    """How to read the run files, when they should not be read as they look."""
+
+    format: str | None = None
+    delimiter: str | None = None
+    encoding: str | None = None
+    units_row: bool | None = None      # None: decide from the file
+    decimal_comma: bool | None = None
+
+    def options(self) -> dict:
+        return {key: getattr(self, key) for key in ("format", "delimiter", "encoding", "units_row",
+                                                     "decimal_comma") if getattr(self, key) is not None}
 
 
 @dataclass(slots=True)
@@ -184,6 +200,7 @@ class Config:
     requirements: Layout = field(default_factory=Layout)
     checks: ChecksJoin | None = None
     time: TimeSpec = field(default_factory=TimeSpec)
+    source: SourceSpec = field(default_factory=SourceSpec)
     signals: dict[str, SignalAlias] = field(default_factory=dict)
     units: UnitTable = field(default_factory=UnitTable)
     unit_defs: dict[str, UnitDef] = field(default_factory=dict)
@@ -481,6 +498,12 @@ class _Parser:
             return default
         return lowered
 
+    def optional_boolean(self, value: object, path: str) -> bool | None:
+        """true, false, or None for "decide from the file"."""
+        if value is None or value == "" or str(value).strip().lower() == "auto":
+            return None
+        return self.boolean(value, path)
+
     def boolean(self, value: object, path: str, default: bool = False) -> bool:
         if value is None or value == "":
             return default
@@ -549,6 +572,7 @@ class _Parser:
         config.events = self.events(root.get("events"), "events", config.units)
         config.conditions = self.conditions(root.get("conditions"), "conditions")
         config.curves = self.curves(root.get("curves"), "curves", config.units)
+        config.source = self.source(root.get("source"), "source")
         config.params = self.params(root.get("params"), "params", config.units)
         config.defaults = self.defaults(root.get("defaults"), "defaults", config.units)
         config.report = self.report(root.get("report"), "report")
@@ -652,6 +676,16 @@ class _Parser:
             on_non_monotonic=self.choice(spec.get("on_non_monotonic"), ("error", "sort", "drop"),
                                          join_path(path, "on_non_monotonic"), "error"),
             t0=self.text(spec.get("t0"), join_path(path, "t0")),
+        )
+
+    def source(self, value: object, path: str) -> SourceSpec:
+        spec = self.keys(value, SOURCE_KEYS, path)
+        return SourceSpec(
+            format=self.text(spec.get("format"), join_path(path, "format")),
+            delimiter=self.text(spec.get("delimiter"), join_path(path, "delimiter")),
+            encoding=self.text(spec.get("encoding"), join_path(path, "encoding")),
+            units_row=self.optional_boolean(spec.get("units_row"), join_path(path, "units_row")),
+            decimal_comma=self.optional_boolean(spec.get("decimal_comma"), join_path(path, "decimal_comma")),
         )
 
     def units(self, value: object, path: str) -> dict[str, UnitDef]:
