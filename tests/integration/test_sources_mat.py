@@ -10,6 +10,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from baslt.api import inspect
 from baslt.errors import SourceError, UsageError
 from baslt.sources import open_source
 from baslt.sources.mat_src import MatSource
@@ -429,3 +430,16 @@ def test_mat_run_compiles_and_verifies_with_declared_units(tmp_path, version):
     assert result.manifest["source"]["format"] == ("mat73" if version == "7.3" else "mat")
     checked = verify(tmp_path / "run.baslt", source=path)
     assert checked.status in ("pass", "pass_with_warnings")
+
+
+def test_a_file_with_nothing_to_plot_says_so(tmp_path):
+    """MATLAB objects (an inline function, a timeseries) arrive as structs of scalars and text."""
+    sio = pytest.importorskip("scipy.io")
+    path = tmp_path / "object.mat"
+    sio.savemat(path, {"obj": {"expr": "x", "numArgs": 1.0, "isEmpty": 0.0}})
+    result = inspect(path)
+    assert result["signals"] == []
+    assert result["issues"] == ["obj: no arrays that can become signals (only scalars, text or empty values)"]
+    sio.savemat(tmp_path / "mixed.mat", {"t": np.arange(3.0), "x": np.arange(3.0), "gain": 2.0, "name": "rig"})
+    mixed = inspect(tmp_path / "mixed.mat")
+    assert [s["name"] for s in mixed["signals"]] == ["x"] and "issues" not in mixed

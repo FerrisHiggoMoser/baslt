@@ -140,6 +140,10 @@ def _inspect(args):
         dtype = entry.get("dtype") or next((a["dtype"] for a in entry.get("arrays", []) if a["name"] == "v"), "-")
         shape = entry.get("shape", [entry.get("n"), entry.get("components", 1)])
         lines.append(f"{entry['name']}  {shape}  {dtype}  {entry.get('unit') or '-'}  {entry['kind']}")
+    if not result["signals"]:
+        lines.append("(no signals this reader can use)")
+        for issue in result.get("issues", []):
+            lines.append(f"  {issue}")
     _emit(args, result, "\n".join(lines))
     return 0
 

@@ -137,16 +137,24 @@ def inspect(source) -> dict:
         return {"status": artifact.manifest.get("status", "pass"), "format": "baslt",
                 "size_bytes": artifact.size, "signals": artifact.index["signals"], "manifest": artifact.manifest}
     adapter = open_source(source)
-    return {"status": "pass", "format": adapter.format,
-            "signals": [asdict(info) for info in adapter.list_signals()]}
+    infos = adapter.list_signals()
+    out = {"status": "pass", "format": adapter.format, "signals": [asdict(info) for info in infos]}
+    if not infos:
+        out["issues"] = _skipped_notes(adapter)  # why the file holds nothing this reader can use
+    return out
+
+
+def _skipped_notes(adapter) -> list[str]:
+    """What a reader skipped, for a source that gave no signals."""
+    try:
+        return list(adapter.load().meta.issues)
+    except Exception:  # the explanation is best effort; the caller already has its error
+        return []
 
 
 def _skipped_text(adapter) -> str:
     """Why a source yielded no signals, from the notes its reader keeps about what it skipped."""
-    try:
-        issues = list(adapter.load().meta.issues)
-    except Exception:  # the explanation is best effort; the caller already has its error
-        return ""
+    issues = _skipped_notes(adapter)
     if not issues:
         return ""
     text = ": " + "; ".join(issues)

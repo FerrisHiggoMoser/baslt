@@ -87,6 +87,8 @@ def check_run(source, reqset: RequirementSet, *, params: Mapping[str, object] | 
         return result, None
     result.signals = len(run.signals)
     result.samples = sum(sig.n for sig in run.signals.values())
+    for note in run.meta.issues:  # what the reader skipped or repaired in this file
+        result.issues.append(Issue(path="source", message=note, location=result.source))
     spans = [(float(sig.t[0]), float(sig.t[-1])) for sig in run.signals.values() if sig.n]
     if spans:
         result.duration = max(end for _, end in spans) - min(start for start, _ in spans)

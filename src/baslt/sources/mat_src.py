@@ -163,8 +163,14 @@ def flatten(tree: Mapping[str, Any]) -> tuple[dict[str, _Var], list[str]]:
             used.add(label)
             walk(element["values"], _join(name, label), depth + 1, time_attr="/" + clock)
 
+    quiet: list[str] = []
     for key, value in tree.items():
+        before, said = len(variables), len(notes)
         walk(value, str(key), 0)
+        if len(variables) == before and len(notes) == said:
+            quiet.append(f"{key}: no arrays that can become signals (only scalars, text or empty values)")
+    if not variables:
+        notes.extend(quiet)  # nothing was found anywhere: say what each variable holds instead
     return variables, notes
 
 
