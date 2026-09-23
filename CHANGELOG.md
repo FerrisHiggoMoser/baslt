@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.0 - 2026-09-23
 
 - `baslt check` tests runs against requirement tables (Excel, CSV, ReqIF) with cases per phase, event window, run
   parameter or limit curve; limit, assert, duration, value and event checks with tolerances, warning margins, gap and
