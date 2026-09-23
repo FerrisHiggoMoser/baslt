@@ -172,13 +172,35 @@ def _event_variants(event) -> Iterator[tuple[str, object | None]]:
     yield "remove the event", None
 
 
+def _dropped_policy(policy, reqs, events):
+    """`policy` with the requirements and events these lists no longer hold.
+
+    The artifact embeds the policy, so a drop shrinks it by that requirement's whole canonical stanza -- far more
+    than POLICY_EDIT_MARGIN -- and measuring the drop against the original policy would claim a minimum the edited
+    policy never needs. The source text is left alone: how the edit rewrites the user's own file is unknowable, and
+    keeping it counts bytes the edit will only remove, which under-claims no budget.
+    """
+    from .policy import canonical_dict, canonical_sha256
+
+    kept_reqs = {req.id for req in reqs}
+    kept_events = {event.name for event in events}
+    hard = [req for req in policy.hard if req.id in kept_reqs]
+    keep = [event for event in policy.events if event.name in kept_events]
+    if len(hard) == len(policy.hard) and len(keep) == len(policy.events):
+        return policy
+    edited = replace(policy, hard=hard, events=keep)
+    canonical = canonical_dict(edited)
+    return replace(edited, canonical=canonical, sha256=canonical_sha256(canonical))
+
+
 def _with(bound, *, reqs=None, events=None):
     reqs = bound.reqs if reqs is None else reqs
+    events = bound.events if events is None else events
     by_signal: dict[str, list] = {}
     for req in reqs:
         by_signal.setdefault(req.signal, []).append(req)
-    return replace(bound, reqs=list(reqs), reqs_by_signal=by_signal,
-                   events=list(bound.events if events is None else events))
+    return replace(bound, policy=_dropped_policy(bound.policy, reqs, events), reqs=list(reqs),
+                   reqs_by_signal=by_signal, events=list(events))
 
 
 def _candidates(run, bound, order: Sequence[str]) -> Iterator[tuple[str, str, Callable, bool]]:
