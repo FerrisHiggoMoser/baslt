@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.1 - 2026-09-23
+
+- `baslt explain` measures each suggested change against the policy that change leaves behind. Dropping a
+  requirement shrinks the policy the artifact embeds, and counting those bytes anyway put the minimum above
+  the budget for a relaxation that fits, so the suggestion was reported as not fitting.
+
 ## 0.1.0 - 2026-09-23
 
 - `baslt check` tests runs against requirement tables (Excel, CSV, ReqIF) with cases per phase, event window, run
